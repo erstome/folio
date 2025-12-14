@@ -1,0 +1,36 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Asset {
+  symbol       String        @id
+  name         String?
+  type         String        @default("STOCK") // STOCK, CRYPTO, ETF
+  transactions Transaction[]
+
+  // Phase 2: Wealth Diversification Fields
+  interestRate Float?    // For Deposits (e.g., 2.5 for 2.5% TAN)
+  maturityDate DateTime? // For Deposits
+  bankName     String?   // For Deposits ("Santander", "CGD")
+  isTaxAdvantaged Boolean @default(false) // For Pensions/PPR
+  manualPrice     Float?   // For Manual Assets (Pensions): Current Unit Price
+}
+model Transaction {
+  id        String   @id @default(uuid())
+  assetId   String
+  asset     Asset    @relation(fields: [assetId], references: [symbol])
+  type      String // BUY, SELL
+  currency  String   @default("USD") // USD, EUR
+  quantity  Float
+  price     Float // Price per share
+  date      DateTime @default(now())
+  createdAt DateTime @default(now())
+}

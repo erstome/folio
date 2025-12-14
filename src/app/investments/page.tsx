@@ -1,0 +1,140 @@
+
+import { Navbar } from "@/components/Navbar";
+import { PortfolioCharts, Holding } from "@/components/PortfolioCharts";
+import { HoldingsTable } from "@/components/HoldingsTable";
+import { RecentTransactions } from "@/components/RecentTransactions";
+import { getPortfolio, getQuotes, getTransactions, updateAssetName } from "../actions";
+import { cn } from "@/lib/utils";
+import { LineChart } from 'lucide-react';
+
+export default async function InvestmentsPage({ searchParams }: { searchParams: { currency?: string } }) {
+    const targetCurrency = searchParams?.currency || 'EUR';
+    const isEur = targetCurrency === 'EUR';
+
+    // 1. Fetch Data
+    const [rawPortfolio, transactions] = await Promise.all([
+        getPortfolio(),
+        getTransactions()
+    ]);
+
+    const uniqueSymbols = Array.from(new Set(rawPortfolio.map(p => p.symbol)));
+
+    // 2. Fetch Quotes & Rates
+    const [quotes, rateResult] = await Promise.all([
+        getQuotes(uniqueSymbols),
+        getQuotes(['EURUSD=X'])
+    ]);
+
+    const rateData = rateResult['EURUSD=X'];
+    const usdPerEur = (rateData && rateData.price) ? rateData.price : 1.1;
+
+    // Helper: Format Currency
+    function formatCurrency(val: number) {
+        return new Intl.NumberFormat('en-US', { style: 'currency', currency: targetCurrency }).format(val);
+    }
+
+    // 3. Process Portfolio (Stocks/Crypto)
+    const enrichedPortfolio: Holding[] = rawPortfolio.map((asset) => {
+        const quote = quotes[asset.symbol] || { price: 0, currency: 'USD', change: 0, changePercent: 0, name: asset.symbol };
+
+        if (quote.name && quote.name !== asset.symbol && asset.name === asset.symbol) {
+            updateAssetName(asset.symbol, quote.name).catch(console.error)
+        }
+        const displayName = (quote.name && quote.name !== asset.symbol) ? quote.name : (asset.name || asset.symbol);
+
+        let priceInTarget = quote.price;
+        if (quote.currency === 'USD' && isEur) {
+            priceInTarget = quote.price / usdPerEur;
+        } else if (quote.currency === 'EUR' && !isEur) {
+            priceInTarget = quote.price * usdPerEur;
+        }
+
+        let avgCostInTarget = asset.avgCost;
+        if (isEur) {
+            avgCostInTarget = asset.avgCost / usdPerEur;
+        }
+
+        const currentValue = asset.quantity * priceInTarget;
+        const totalCostVector = asset.quantity * avgCostInTarget;
+        const gain = currentValue - totalCostVector;
+        const gainPercent = totalCostVector > 0 ? (gain / totalCostVector) * 100 : 0;
+
+        return {
+            symbol: asset.symbol,
+            name: displayName,
+            quantity: asset.quantity,
+            currentPrice: priceInTarget,
+            avgCost: avgCostInTarget,
+            totalCost: totalCostVector,
+            marketValue: currentValue,
+            gain,
+            gainPercent,
+        }
+    });
+
+    const totalPortfolioValue = enrichedPortfolio.reduce((acc, curr) => acc + (curr.marketValue || 0), 0);
+    const totalGain = enrichedPortfolio.reduce((acc, curr) => acc + (curr.gain || 0), 0);
+    const totalCost = enrichedPortfolio.reduce((acc, curr) => acc + (curr.quantity * curr.avgCost), 0);
+    const totalGainPercent = totalCost > 0 ? (totalGain / totalCost) * 100 : 0;
+
+    return (
+        <div className="min-h-screen pb-20">
+            <Navbar />
+
+            <div className="max-w-7xl mx-auto px-6 py-8 space-y-8">
+                {/* Header */}
+                <div className="flex items-center justify-between">
+                    <div>
+                        <h2 className="text-3xl font-bold text-white tracking-tight flex items-center gap-3">
+                            <LineChart className="w-8 h-8 text-indigo-500" />
+                            Stock Investments
+                        </h2>
+                        <p className="text-zinc-400 mt-1">Manage your stocks, ETFs and crypto assets.</p>
+                    </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+                    {/* Left Column: Tables */}
+                    <div className="md:col-span-2 space-y-8">
+                        {/* Holdings */}
+                        <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6">
+                            <div className="flex items-center justify-between mb-6">
+                                <h2 className="text-xl font-bold text-white">Portfolio Holdings</h2>
+                                <div className="text-right">
+                                    <div className="text-sm text-zinc-400">Total Value</div>
+                                    <div className="text-2xl font-bold text-white">{formatCurrency(totalPortfolioValue)}</div>
+                                    <div className={cn("text-xs font-medium", totalGain >= 0 ? "text-emerald-500" : "text-rose-500")}>
+                                        {totalGain >= 0 ? '+' : ''}{formatCurrency(totalGain)} ({totalGainPercent.toFixed(2)}%)
+                                    </div>
+                                </div>
+                            </div>
+                            <HoldingsTable
+                                holdings={enrichedPortfolio}
+                                currency={targetCurrency}
+                            />
+                        </div>
+
+                        {/* Recent Activity */}
+                        <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6">
+                            <h2 className="text-xl font-bold text-white mb-6">Recent Activity</h2>
+                            <RecentTransactions
+                                transactions={transactions}
+                                assets={enrichedPortfolio}
+                            />
+                        </div>
+                    </div>
+
+                    {/* Right Column: Charts */}
+                    <div className="md:col-span-1">
+                        <div className="sticky top-24 space-y-8">
+                            <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6 h-[400px]">
+                                <h3 className="text-xl font-bold text-white mb-6">Asset Allocation</h3>
+                                <PortfolioCharts holdings={enrichedPortfolio} currency={targetCurrency} />
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+}
