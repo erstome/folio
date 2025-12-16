@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { createPortal } from 'react-dom'
 import { usePathname } from 'next/navigation'
-import { Plus, LineChart, Landmark, PiggyBank, X, Sun, Moon } from 'lucide-react'
+import { Plus, LineChart, Landmark, PiggyBank, X } from 'lucide-react'
 import { AddTransactionDialog } from './AddTransactionDialog'
 import { AddDepositDialog } from './AddDepositDialog'
 import { AddPensionDialog } from './AddPensionDialog'
@@ -12,24 +12,10 @@ export function HeaderActions() {
     const pathname = usePathname()
     const [isMenuOpen, setIsMenuOpen] = useState(false)
     const [mounted, setMounted] = useState(false)
-    const [theme, setTheme] = useState<'light' | 'dark'>('light')
 
     useEffect(() => {
         setMounted(true);
     }, []);
-
-    useEffect(() => {
-        if (typeof window !== 'undefined') {
-            const stored = localStorage.getItem('theme');
-            if (stored) setTheme(stored as 'light' | 'dark');
-        }
-    }, []);
-
-    useEffect(() => {
-        if (typeof document !== 'undefined') {
-            document.documentElement.classList.toggle('dark', theme === 'dark');
-        }
-    }, [theme]);
 
     // Dialog States
     const [isTransactionOpen, setIsTransactionOpen] = useState(false)
@@ -68,10 +54,7 @@ export function HeaderActions() {
         // Default / Dashboard
         return {
             label: 'Add Action',
-            color: 'bg-zinc-800 hover:bg-zinc-700 text-zinc-200', // Changed to match Quick Actions? No, user said same COLORS. 
-            // Dashboard has mixed colors. Let's keep it neutral or generic Main Color (Indigo) unless user specified button color itself.
-            // User said: "colors of the widgets should be the same that you have for quick actions" -> Refers to the menu items I assume.
-            // Let's make the main dashboard button Indigo as "Add Transaction" is generic.
+            color: 'bg-indigo-600 hover:bg-indigo-500',
             action: () => setIsMenuOpen(true)
         }
     }
@@ -87,19 +70,6 @@ export function HeaderActions() {
                 <Plus className="w-4 h-4" />
                 {config.label}
             </button>
-            {/* Light/Dark mode toggle */}
-            {/* <button
-                onClick={() => {
-                    const newTheme = theme === 'light' ? 'dark' : 'light';
-                    setTheme(newTheme);
-                    if (typeof window !== 'undefined') {
-                        localStorage.setItem('theme', newTheme);
-                    }
-                }}
-                className="flex items-center justify-center p-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-white"
-            >
-                {theme === 'light' ? <Moon className="w-5 h-5" /> : <Sun className="w-5 h-5" />}
-            </button> */}
 
             {/* Dashboard Selection Menu Modal */}
             {isMenuOpen && mounted && createPortal(

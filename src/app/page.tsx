@@ -41,15 +41,23 @@ export default async function Home({ searchParams }: { searchParams: { currency?
     }
 
     // 3. Calculate Totals
-    // Portfolio
+    // Portfolio - Calculate value AND cost in target currency (same logic as investments page)
     let totalPortfolioValue = 0;
+    let totalPortfolioCost = 0;
     rawPortfolio.forEach(asset => {
         const quote = quotes[asset.symbol] || { price: 0, currency: 'USD' };
         let priceInTarget = quote.price;
         if (quote.currency === 'USD' && isEur) priceInTarget /= usdPerEur;
         else if (quote.currency === 'EUR' && !isEur) priceInTarget *= usdPerEur;
 
+        // Convert avgCost to target currency (costs are stored in USD)
+        let avgCostInTarget = asset.avgCost;
+        if (isEur) {
+            avgCostInTarget = asset.avgCost / usdPerEur;
+        }
+
         totalPortfolioValue += asset.quantity * priceInTarget;
+        totalPortfolioCost += asset.quantity * avgCostInTarget;
     });
 
     // Deposits
@@ -68,7 +76,22 @@ export default async function Home({ searchParams }: { searchParams: { currency?
 
     const totalNetWorth = totalPortfolioValue + totalDepositsValue + totalPensionsValue;
 
-    // 4. Prepare Global Allocation Data
+    // Calculate Gains BEFORE creating globalAllocation
+    // Investments Gain (using properly converted costs)
+    const totalInvestmentsGain = totalPortfolioValue - totalPortfolioCost
+    const totalInvestmentsGainPercent = totalPortfolioCost > 0 ? (totalInvestmentsGain / totalPortfolioCost) * 100 : 0
+
+    // Deposits Gain (Net Interest of Active Deposits)
+    // 28% Tax Rate assumption for consistency
+    const activeDepositsNetInterest = activeDeposits.reduce((sum, d) => sum + (d.accruedInterest * 0.72), 0)
+
+    // Pensions Gain
+    // For manual pensions, we now rely on the new gain logic from getPensions
+    const totalPensionsInvested = rawPensions.reduce((sum, p) => sum + convertToTarget(p.invested || p.totalValue, p.currency), 0)
+    const totalPensionsGain = rawPensions.reduce((sum, p) => sum + convertToTarget(p.gain || 0, p.currency), 0)
+    const totalPensionsGainPercent = totalPensionsInvested > 0 ? (totalPensionsGain / totalPensionsInvested) * 100 : 0
+
+    // 4. Prepare Global Allocation Data with actual gains
     // We create synthetic "Holdings" to piggyback on the PortfolioCharts component
     const globalAllocation: Holding[] = [
         {
@@ -77,10 +100,10 @@ export default async function Home({ searchParams }: { searchParams: { currency?
             quantity: 1,
             marketValue: totalPortfolioValue,
             currentPrice: totalPortfolioValue,
-            avgCost: 0,
-            totalCost: 0,
-            gain: 0,
-            gainPercent: 0,
+            avgCost: totalPortfolioCost,
+            totalCost: totalPortfolioCost,
+            gain: totalInvestmentsGain,
+            gainPercent: totalInvestmentsGainPercent,
         },
         {
             symbol: 'DEPOSIT',
@@ -88,10 +111,10 @@ export default async function Home({ searchParams }: { searchParams: { currency?
             quantity: 1,
             marketValue: totalDepositsValue,
             currentPrice: totalDepositsValue,
-            avgCost: 0,
-            totalCost: 0,
-            gain: 0,
-            gainPercent: 0,
+            avgCost: totalDepositsValue - activeDepositsNetInterest,
+            totalCost: totalDepositsValue - activeDepositsNetInterest,
+            gain: activeDepositsNetInterest,
+            gainPercent: totalDepositsValue > 0 ? (activeDepositsNetInterest / totalDepositsValue) * 100 : 0,
         },
         {
             symbol: 'PENSION',
@@ -99,27 +122,12 @@ export default async function Home({ searchParams }: { searchParams: { currency?
             quantity: 1,
             marketValue: totalPensionsValue,
             currentPrice: totalPensionsValue,
-            avgCost: 0,
-            totalCost: 0,
-            gain: 0,
-            gainPercent: 0,
+            avgCost: totalPensionsInvested,
+            totalCost: totalPensionsInvested,
+            gain: totalPensionsGain,
+            gainPercent: totalPensionsGainPercent,
         }
     ].filter(h => h.marketValue > 0);
-
-    // Investments Gain
-    const totalInvestmentsCost = rawPortfolio.reduce((sum, h) => sum + h.totalCost, 0)
-    const totalInvestmentsGain = totalPortfolioValue - totalInvestmentsCost
-    const totalInvestmentsGainPercent = totalInvestmentsCost > 0 ? (totalInvestmentsGain / totalInvestmentsCost) * 100 : 0
-
-    // Deposits Gain (Net Interest of Active Deposits)
-    // 28% Tax Rate assumption for consistency
-    const activeDepositsNetInterest = activeDeposits.reduce((sum, d) => sum + (d.accruedInterest * 0.72), 0)
-
-    // Pensions Gain
-    // For manual pensions, we now rely on the new gain logic from getPensions
-    const totalPensionsInvested = rawPensions.reduce((sum, p) => sum + (p.invested || p.totalValue), 0) // Fallback if invested missing
-    const totalPensionsGain = rawPensions.reduce((sum, p) => sum + (p.gain || 0), 0)
-    const totalPensionsGainPercent = totalPensionsInvested > 0 ? (totalPensionsGain / totalPensionsInvested) * 100 : 0
 
     return (
         <div className="min-h-screen pb-20">
@@ -199,7 +207,7 @@ export default async function Home({ searchParams }: { searchParams: { currency?
                                 <div className="text-3xl font-bold text-white tracking-tight">
                                     {formatCurrency(totalPensionsValue)}
                                 </div>
-                                <div className={`text - sm mt - 1 font - medium ${totalPensionsGain >= 0 ? 'text-emerald-500' : 'text-rose-500'} `}>
+                                <div className={`text-sm mt-1 font-medium ${totalPensionsGain >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
                                     {totalPensionsGain >= 0 ? '+' : ''}{formatCurrency(totalPensionsGain)} ({totalPensionsGainPercent.toFixed(2)}%)
                                 </div>
                             </div>
@@ -224,15 +232,15 @@ export default async function Home({ searchParams }: { searchParams: { currency?
                         <div className="space-y-6">
                             <h3 className="text-xl font-bold text-white">Quick Actions</h3>
                             <div className="grid grid-cols-1 gap-4">
-                                <Link href={`/ investments ? currency = ${targetCurrency} `} className="p-4 bg-zinc-950/50 border border-zinc-800 rounded-lg flex items-center justify-between hover:bg-zinc-900 transition-colors">
+                                <Link href={`/investments?currency=${targetCurrency}`} className="p-4 bg-zinc-950/50 border border-zinc-800 rounded-lg flex items-center justify-between hover:bg-zinc-900 transition-colors">
                                     <span className="font-medium text-zinc-300">Manage Stocks & ETFs</span>
                                     <span className="text-indigo-500">Go to Portfolio &rarr;</span>
                                 </Link>
-                                <Link href={`/ deposits ? currency = ${targetCurrency} `} className="p-4 bg-zinc-950/50 border border-zinc-800 rounded-lg flex items-center justify-between hover:bg-zinc-900 transition-colors">
+                                <Link href={`/deposits?currency=${targetCurrency}`} className="p-4 bg-zinc-950/50 border border-zinc-800 rounded-lg flex items-center justify-between hover:bg-zinc-900 transition-colors">
                                     <span className="font-medium text-zinc-300">Update Bank Deposits</span>
                                     <span className="text-emerald-500">Go to Deposits &rarr;</span>
                                 </Link>
-                                <Link href={`/ pension ? currency = ${targetCurrency} `} className="p-4 bg-zinc-950/50 border border-zinc-800 rounded-lg flex items-center justify-between hover:bg-zinc-900 transition-colors">
+                                <Link href={`/pension?currency=${targetCurrency}`} className="p-4 bg-zinc-950/50 border border-zinc-800 rounded-lg flex items-center justify-between hover:bg-zinc-900 transition-colors">
                                     <span className="font-medium text-zinc-300">Track Pension Funds</span>
                                     <span className="text-amber-500">Go to Retirement &rarr;</span>
                                 </Link>

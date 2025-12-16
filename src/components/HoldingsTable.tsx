@@ -1,16 +1,36 @@
 'use client'
 
 import { useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { Holding } from './PortfolioCharts'
 import { cn } from '@/lib/utils'
-import { ArrowUpDown, Search } from 'lucide-react'
+import { ArrowUpDown, Search, Trash2 } from 'lucide-react'
+import { deleteAsset } from '@/app/actions'
 
 type SortKey = 'asset' | 'price' | 'balance' | 'value'
 type SortDirection = 'asc' | 'desc'
 
 export function HoldingsTable({ holdings, currency }: { holdings: Holding[], currency: string }) {
+    const router = useRouter()
     const [sortConfig, setSortConfig] = useState<{ key: SortKey, direction: SortDirection } | null>(null)
     const [filterQuery, setFilterQuery] = useState('')
+    const [deletingSymbol, setDeletingSymbol] = useState<string | null>(null)
+
+    const handleDelete = async (symbol: string) => {
+        if (!confirm(`Are you sure you want to delete ${symbol} and all its transactions?`)) {
+            return
+        }
+        setDeletingSymbol(symbol)
+        try {
+            await deleteAsset(symbol)
+            router.refresh()
+        } catch (error) {
+            console.error('Failed to delete asset:', error)
+            alert('Failed to delete asset')
+        } finally {
+            setDeletingSymbol(null)
+        }
+    }
 
     const formatCurrency = (val: number) => {
         return new Intl.NumberFormat('en-US', { style: 'currency', currency }).format(val);
@@ -106,12 +126,13 @@ export function HoldingsTable({ holdings, currency }: { holdings: Holding[], cur
                                     <ArrowUpDown className="w-3 h-3" />
                                 </div>
                             </th>
+                            <th className="px-6 py-4 font-medium text-right">Action</th>
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-zinc-800/50">
                         {sortedHoldings.length === 0 ? (
                             <tr className="bg-zinc-900/20">
-                                <td className="px-6 py-8 text-zinc-500 text-center" colSpan={4}>
+                                <td className="px-6 py-8 text-zinc-500 text-center" colSpan={5}>
                                     No assets found.
                                 </td>
                             </tr>
@@ -133,6 +154,16 @@ export function HoldingsTable({ holdings, currency }: { holdings: Holding[], cur
                                     </td>
                                     <td className="px-6 py-4 text-right font-medium text-white">
                                         {formatCurrency(asset.marketValue || 0)}
+                                    </td>
+                                    <td className="px-6 py-4 text-right">
+                                        <button
+                                            onClick={() => handleDelete(asset.symbol)}
+                                            disabled={deletingSymbol === asset.symbol}
+                                            className="text-zinc-500 hover:text-rose-500 transition-colors disabled:opacity-50"
+                                            title="Delete asset"
+                                        >
+                                            <Trash2 className="w-4 h-4" />
+                                        </button>
                                     </td>
                                 </tr>
                             ))

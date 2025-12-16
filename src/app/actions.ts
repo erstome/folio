@@ -21,6 +21,7 @@ export type TransactionData = {
 export type DepositData = {
     amount: number
     bankName: string
+    name?: string
     currency: string
     interestRate: number
     startDate: Date
@@ -535,6 +536,45 @@ export async function deleteAsset(id: string) {
         return { success: true }
     } catch (e) {
         console.error("Failed to delete asset", e)
+        return { success: false }
+    }
+}
+
+export async function deleteTransaction(id: string) {
+    try {
+        // Get transaction to find asset
+        const transaction = await prisma.transaction.findUnique({
+            where: { id }
+        })
+
+        if (!transaction) {
+            return { success: false, error: 'Transaction not found' }
+        }
+
+        const assetId = transaction.assetId
+
+        // Delete the transaction
+        await prisma.transaction.delete({
+            where: { id }
+        })
+
+        // Check if asset has any remaining transactions
+        const remainingTransactions = await prisma.transaction.count({
+            where: { assetId }
+        })
+
+        // If no transactions remain, delete the asset too
+        if (remainingTransactions === 0) {
+            await prisma.asset.delete({
+                where: { symbol: assetId }
+            })
+        }
+
+        revalidatePath('/')
+        revalidatePath('/investments')
+        return { success: true }
+    } catch (e) {
+        console.error("Failed to delete transaction", e)
         return { success: false }
     }
 }

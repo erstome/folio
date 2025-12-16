@@ -1,9 +1,10 @@
 'use client'
 
 import { useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { AddTransactionDialog } from './AddTransactionDialog'
-import { TransactionData } from '@/app/actions'
-import { Pencil, ArrowUpDown, Search } from 'lucide-react'
+import { TransactionData, deleteTransaction } from '@/app/actions'
+import { Pencil, Trash2, ArrowUpDown, Search } from 'lucide-react'
 
 // Extended type to include ID which comes from DB
 type Transaction = TransactionData & { id: string }
@@ -11,9 +12,27 @@ type SortKey = 'date' | 'asset' | 'type' | 'quantity' | 'price'
 type SortDirection = 'asc' | 'desc'
 
 export function RecentTransactions({ transactions }: { transactions: Transaction[] }) {
+    const router = useRouter()
     const [editingTx, setEditingTx] = useState<Transaction | null>(null)
     const [sortConfig, setSortConfig] = useState<{ key: SortKey, direction: SortDirection } | null>(null)
     const [filterQuery, setFilterQuery] = useState('')
+    const [deletingId, setDeletingId] = useState<string | null>(null)
+
+    const handleDelete = async (id: string, symbol: string) => {
+        if (!confirm(`Are you sure you want to delete this ${symbol} transaction?`)) {
+            return
+        }
+        setDeletingId(id)
+        try {
+            await deleteTransaction(id)
+            router.refresh()
+        } catch (error) {
+            console.error('Failed to delete transaction:', error)
+            alert('Failed to delete transaction')
+        } finally {
+            setDeletingId(null)
+        }
+    }
 
     const handleSort = (key: SortKey) => {
         let direction: SortDirection = 'asc'
@@ -143,12 +162,23 @@ export function RecentTransactions({ transactions }: { transactions: Transaction
                                         {tx.price.toFixed(2)} {tx.currency || 'USD'}
                                     </td>
                                     <td className="px-6 py-4 text-right">
-                                        <button
-                                            onClick={() => setEditingTx(tx)}
-                                            className="text-zinc-500 hover:text-white transition-colors"
-                                        >
-                                            <Pencil className="w-4 h-4" />
-                                        </button>
+                                        <div className="flex items-center justify-end gap-2">
+                                            <button
+                                                onClick={() => setEditingTx(tx)}
+                                                className="text-zinc-500 hover:text-white transition-colors"
+                                                title="Edit transaction"
+                                            >
+                                                <Pencil className="w-4 h-4" />
+                                            </button>
+                                            <button
+                                                onClick={() => handleDelete(tx.id, tx.symbol)}
+                                                disabled={deletingId === tx.id}
+                                                className="text-zinc-500 hover:text-rose-500 transition-colors disabled:opacity-50"
+                                                title="Delete transaction"
+                                            >
+                                                <Trash2 className="w-4 h-4" />
+                                            </button>
+                                        </div>
                                     </td>
                                 </tr>
                             ))
