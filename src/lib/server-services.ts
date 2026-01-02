@@ -4,7 +4,7 @@ import fs from 'fs'
 import path from 'path'
 
 export const yahooFinance = new YahooFinance({
-    suppressNotices: ['yahooSurvey']
+    suppressNotices: ['yahooSurvey', 'ripHistorical']
 })
 
 export const DB_PATH = path.join(process.cwd(), 'prisma', 'dev.db')

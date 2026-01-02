@@ -105,6 +105,8 @@ export function DataManagementDialog({ isOpen, onClose }: DataManagementDialogPr
             GOOGLE_CLIENT_ID: formData.get('clientId') as string,
             GOOGLE_CLIENT_SECRET: formData.get('clientSecret') as string,
             NEXT_PUBLIC_BASE_URL: formData.get('baseUrl') as string,
+            TWELVEDATA_API_KEY: formData.get('twelveDataApiKey') as string,
+            FMP_API_KEY: formData.get('fmpApiKey') as string,
         }
         await updateSettings(data)
         setConfig(data)
@@ -257,6 +259,32 @@ export function DataManagementDialog({ isOpen, onClose }: DataManagementDialogPr
                                         placeholder="http://localhost:3000"
                                         className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
                                     />
+                                </div>
+                                <div className="space-y-1">
+                                    <label className="text-xs font-medium text-muted-foreground">FMP API Key (Optional)</label>
+                                    <input
+                                        name="fmpApiKey"
+                                        type="password"
+                                        defaultValue={config.FMP_API_KEY}
+                                        placeholder="Enter FMP API Key"
+                                        className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
+                                    />
+                                    <p className="text-[10px] text-muted-foreground">
+                                        Free tier: 250 req/day. Premium needed for some EU stocks.
+                                    </p>
+                                </div>
+                                <div className="space-y-1">
+                                    <label className="text-xs font-medium text-muted-foreground">Twelvedata API Key (Optional)</label>
+                                    <input
+                                        name="twelveDataApiKey"
+                                        type="password"
+                                        defaultValue={config.TWELVEDATA_API_KEY}
+                                        placeholder="Enter Twelvedata API Key"
+                                        className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
+                                    />
+                                    <p className="text-[10px] text-muted-foreground">
+                                        Free tier: 800 credits/day. Good for EU stocks.
+                                    </p>
                                 </div>
                             </div>
 

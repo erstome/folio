@@ -204,82 +204,221 @@ export async function getPortfolio() {
     return holdings
 }
 
+// Helper for FMP
+// Helper for Twelvedata
+async function fetchTwelvedataQuotes(symbols: string[], apiKey: string) {
+    // Twelvedata batch: symbol=AAPL,MSFT,EUR/USD
+    // Need to handle different ticker formats if necessary, but try direct first.
+    // Twelvedata Rate Limit (Free): 8 requests/minute, 800/day. Batches count as 1 request!
+    const url = `https://api.twelvedata.com/quote?symbol=${symbols.join(',')}&apikey=${apiKey}`;
+    const response = await fetch(url);
+    if (!response.ok) {
+        throw new Error(`Twelvedata API Error: ${response.statusText}`);
+    }
+    const data = await response.json();
+    // Twelvedata returns object { "AAP": {...}, "MSFT": {...} } OR single object if 1 symbol { symbol: "..." }
+    // If error in batch: { "code": 400, "message": "..." }
+    if (data.code && data.code !== 200) throw new Error(data.message);
+
+    // Normalize to array
+    if (data.symbol) return [data]; // Single result
+    return Object.values(data); // Batch result
+}
+
+// Helper for FMP (Re-added for testing)
+async function fetchFMPQuotes(symbols: string[], apiKey: string) {
+    const url = `https://financialmodelingprep.com/api/v3/quote/${symbols.join(',')}?apikey=${apiKey}`;
+    const response = await fetch(url);
+    if (!response.ok) {
+        // Log explicitly to help user debug permissions
+        const errorBody = await response.text();
+        console.error(`[fetchFMPQuotes] Error: ${response.status} ${response.statusText}`, errorBody);
+        throw new Error(`FMP API Error: ${response.statusText} - ${errorBody}`);
+    }
+    const data = await response.json();
+    return data;
+}
+
+// Simple In-Memory Cache (Global on Server)
+// Key: Symbol, Value: { price, data, timestamp }
+const QUOTE_CACHE: Record<string, { price: number, data: any, timestamp: number }> = {};
+const CACHE_TTL = 5 * 60 * 1000; // 5 Minutes
+
 export async function getQuotes(symbols: string[]) {
     if (symbols.length === 0) return {}
 
-    console.log(`[getQuotes] Fetching quotes for: ${symbols.join(', ')}`)
+    const now = Date.now();
+    const uniqueSymbols = Array.from(new Set(symbols)); // De-dupe input
+    const results: any = {};
+    const missingSymbols: string[] = [];
 
-    try {
-        const result = await yahooFinance.quote(symbols)
-        const quotes = Array.isArray(result) ? result : [result]
-
-        // Update cache in database for each successful quote
-        for (const q of quotes) {
-            if (q && (q.regularMarketPrice || q.currentPrice)) {
-                await prisma.asset.update({
-                    where: { symbol: q.symbol },
-                    data: {
-                        lastPrice: q.regularMarketPrice || q.currentPrice,
-                        lastCurrency: q.currency,
-                        lastUpdate: new Date()
-                    }
-                }).catch(e => console.error(`[getQuotes] Failed to update cache for ${q.symbol}`, e))
-            }
-        }
-
-        // Map array to object for easier lookup
-        return quotes.reduce((acc: any, q: any) => {
-            if (!q) return acc;
-            acc[q.symbol] = {
-                price: q.regularMarketPrice || q.currentPrice || 0,
-                currency: q.currency,
-                change: q.regularMarketChange || 0,
-                changePercent: q.regularMarketChangePercent || 0,
-                name: q.longName || q.shortName || q.symbol
-            }
-            return acc
-        }, {})
-    } catch (error: any) {
-        console.error("[getQuotes] Failed to fetch quotes:", error)
-
-        // Fallback: Try to get cached prices from database
-        try {
-            const cachedAssets = await prisma.asset.findMany({
-                where: { symbol: { in: symbols } },
-                select: {
-                    symbol: true,
-                    lastPrice: true,
-                    lastCurrency: true,
-                    name: true,
-                    transactions: {
-                        orderBy: { date: 'desc' },
-                        take: 1
-                    }
-                }
-            })
-
-            return cachedAssets.reduce((acc: any, asset: any) => {
-                // Priority: lastPrice > last transaction price > 0
-                const fallbackPrice = asset.lastPrice || (asset.transactions[0]?.price) || 0;
-                const fallbackCurrency = asset.lastCurrency || (asset.transactions[0]?.currency) || 'USD';
-
-                if (fallbackPrice > 0) {
-                    acc[asset.symbol] = {
-                        price: fallbackPrice,
-                        currency: fallbackCurrency,
-                        change: 0,
-                        changePercent: 0,
-                        name: asset.name || asset.symbol,
-                        isCached: true
-                    }
-                }
-                return acc;
-            }, {})
-        } catch (dbError) {
-            console.error("[getQuotes] Failed to fetch from cache/history:", dbError)
-            return {}
+    // 1. Check Cache First
+    for (const sym of uniqueSymbols) {
+        const cached = QUOTE_CACHE[sym];
+        if (cached && (now - cached.timestamp < CACHE_TTL)) {
+            results[sym] = cached.data;
+            // console.log(`[getQuotes] Cache hit for ${sym}`);
+        } else {
+            missingSymbols.push(sym);
         }
     }
+
+    if (missingSymbols.length === 0) {
+        return results;
+    }
+
+    console.log(`[getQuotes] Fetching fresh quotes for: ${missingSymbols.join(', ')}`)
+
+    // Helper to update specific symbol cache safely
+    const updateSymbolCache = async (symbol: string, data: any) => {
+        // Update In-Memory Cache
+        QUOTE_CACHE[symbol] = {
+            price: data.price,
+            data: data,
+            timestamp: Date.now()
+        };
+        // Update DB Cache (Safe Upsert)
+        try {
+            await prisma.asset.upsert({
+                where: { symbol: symbol },
+                update: {
+                    lastPrice: data.price,
+                    lastCurrency: data.currency,
+                    lastUpdate: new Date()
+                },
+                create: {
+                    symbol: symbol,
+                    name: data.name || symbol,
+                    type: 'STOCK', // Default fallback
+                    lastPrice: data.price,
+                    lastCurrency: data.currency,
+                    lastUpdate: new Date()
+                }
+            });
+        } catch (e) {
+            console.error(`[getQuotes] DB Cache update failed for ${symbol}`, e);
+        }
+    };
+
+    // 2. Try Twelvedata if Key exists
+    const settings = await getSettings();
+    let symbolsToFetch = [...missingSymbols];
+
+    if (settings.TWELVEDATA_API_KEY && symbolsToFetch.length > 0) {
+        try {
+            console.log('[getQuotes] Using Twelvedata API');
+            const tdResults = await fetchTwelvedataQuotes(symbolsToFetch, settings.TWELVEDATA_API_KEY);
+
+            const fetchedSymbols = new Set<string>();
+
+            for (const q of tdResults) {
+                if (q && q.symbol) {
+                    const price = parseFloat(q.close) || parseFloat(q.rate) || 0;
+                    const change = parseFloat(q.change) || 0;
+                    const changeP = parseFloat(q.percent_change) || 0;
+
+                    const quoteData = {
+                        price: price,
+                        currency: q.currency || 'USD',
+                        change: change,
+                        changePercent: changeP,
+                        name: q.name || q.symbol,
+                        lastUpdate: new Date(),
+                        isCached: false
+                    };
+
+                    results[q.symbol] = quoteData;
+                    await updateSymbolCache(q.symbol, quoteData);
+                    fetchedSymbols.add(q.symbol);
+                }
+            }
+            // Remove fetched from list
+            symbolsToFetch = symbolsToFetch.filter(s => !fetchedSymbols.has(s));
+
+        } catch (e: any) {
+            console.error('[getQuotes] Twelvedata failed, falling back to Next:', e.message);
+        }
+    }
+
+    // 3. Try FMP if Key exists and still have missing symbols
+    if (settings.FMP_API_KEY && symbolsToFetch.length > 0) {
+        try {
+            console.log('[getQuotes] Using FMP API');
+            const fmpResults = await fetchFMPQuotes(symbolsToFetch, settings.FMP_API_KEY);
+
+            const fetchedSymbols = new Set<string>();
+
+            for (const q of fmpResults) {
+                if (q && q.symbol) {
+                    const quoteData = {
+                        price: q.price,
+                        currency: q.currency || 'USD',
+                        change: q.change,
+                        changePercent: q.changesPercentage,
+                        name: q.name,
+                        lastUpdate: new Date(),
+                        isCached: false
+                    };
+                    results[q.symbol] = quoteData;
+                    await updateSymbolCache(q.symbol, quoteData);
+                    fetchedSymbols.add(q.symbol);
+                }
+            }
+            symbolsToFetch = symbolsToFetch.filter(s => !fetchedSymbols.has(s));
+
+        } catch (e: any) {
+            console.error('[getQuotes] FMP failed, falling back to Yahoo:', e.message);
+        }
+    }
+
+    // 4. Fallback to Yahoo for remaining
+    if (symbolsToFetch.length > 0) {
+        try {
+            const result = await yahooFinance.quote(symbolsToFetch)
+            const quotes = Array.isArray(result) ? result : [result]
+
+            for (const q of quotes) {
+                if (q && (q.regularMarketPrice || q.currentPrice)) {
+                    const price = q.regularMarketPrice || q.currentPrice || 0;
+                    const quoteData = {
+                        price: price,
+                        currency: q.currency,
+                        change: q.regularMarketChange || 0,
+                        changePercent: q.regularMarketChangePercent || 0,
+                        name: q.longName || q.shortName || q.symbol,
+                        lastUpdate: new Date(),
+                        isCached: false
+                    }
+                    results[q.symbol] = quoteData;
+                    await updateSymbolCache(q.symbol, quoteData);
+                }
+            }
+        } catch (error: any) {
+            console.error("[getQuotes] Yahoo failed:", error.message)
+            // Final fallback: Return from DB if absolutely nothing else worked
+            try {
+                const cachedAssets = await prisma.asset.findMany({
+                    where: { symbol: { in: symbolsToFetch } },
+                    select: { symbol: true, lastPrice: true, lastCurrency: true, lastUpdate: true, name: true }
+                })
+                for (const asset of cachedAssets) {
+                    if (asset.lastPrice) {
+                        results[asset.symbol] = {
+                            price: asset.lastPrice,
+                            currency: asset.lastCurrency || 'USD',
+                            change: 0,
+                            changePercent: 0,
+                            name: asset.name || asset.symbol,
+                            lastUpdate: asset.lastUpdate,
+                            isCached: true
+                        }
+                    }
+                }
+            } catch (e) { }
+        }
+    }
+
+    return results;
 }
 
 export async function updateAssetName(symbol: string, name: string) {
@@ -776,5 +915,79 @@ export async function backupToLocalPath(targetPath: string) {
         return { success: true, path: fullPath }
     } catch (e: any) {
         return { success: false, error: e.message }
+    }
+}
+
+// --- Historical Price Sync ---
+
+// Helper to delay execution
+const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
+export async function syncHistoricalPrices(symbols?: string[]) {
+    try {
+        const assets = await prisma.asset.findMany({
+            where: {
+                type: { in: ['STOCK', 'ETF'] },
+                ...(symbols ? { symbol: { in: symbols } } : {})
+            },
+            include: { transactions: { orderBy: { date: 'asc' }, take: 1 } }
+        });
+
+        console.log(`[syncHistoricalPrices] Syncing ${assets.length} assets with Yahoo.`);
+
+        for (const asset of assets) {
+            if (asset.transactions.length === 0) continue;
+
+            // Optimization: Check if we already have data for the current month
+            const lastHistory = await prisma.historicalPrice.findFirst({
+                where: { symbol: asset.symbol },
+                orderBy: { date: 'desc' },
+                select: { date: true }
+            });
+
+            // If existing data is fresher than 25 days, skip to save requests
+            if (lastHistory && lastHistory.date > new Date(Date.now() - 1000 * 60 * 60 * 24 * 25)) {
+                console.log(`[syncHistoricalPrices] Skipping ${asset.symbol}, data is fresh enough.`);
+                continue;
+            }
+
+            // ADDED THROTTLING: Random delay between 2-5 seconds to avoid 429s
+            await delay(2000 + Math.random() * 3000);
+
+            try {
+                // YAHOO FALLBACK (Original Logic)
+                const startDate = (asset.transactions[0] && asset.transactions[0].date) || new Date('2020-01-01');
+                console.log(`[syncHistoricalPrices] Fetching Yahoo history for ${asset.symbol}`);
+
+                const queryOptions = {
+                    period1: startDate,
+                    period2: new Date(),
+                    interval: '1mo' as const,
+                };
+
+                const results = await yahooFinance.historical(asset.symbol, queryOptions);
+
+                for (const row of results) {
+                    const rowDate = new Date(row.date);
+                    const endOfMonth = new Date(rowDate.getFullYear(), rowDate.getMonth() + 1, 0);
+
+                    await prisma.historicalPrice.upsert({
+                        where: { symbol_date: { symbol: asset.symbol, date: endOfMonth } },
+                        update: { price: row.close || row.adjClose || 0, currency: asset.lastCurrency || 'USD' },
+                        create: { symbol: asset.symbol, date: endOfMonth, price: row.close || row.adjClose || 0, currency: asset.lastCurrency || 'USD' }
+                    });
+                }
+            } catch (err: any) {
+                console.error(`[syncHistoricalPrices] Failed for ${asset.symbol}:`, err.message);
+                if (err.code === 429 || err.status === 429 || err.message?.includes('429')) {
+                    console.error('[syncHistoricalPrices] Rate limit hit. Stopping sync.');
+                    break;
+                }
+            }
+        }
+        return { success: true };
+    } catch (e) {
+        console.error("[syncHistoricalPrices] Global error:", e);
+        return { success: false };
     }
 }

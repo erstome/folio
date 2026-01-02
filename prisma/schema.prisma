@@ -38,6 +38,16 @@ model Transaction {
   createdAt DateTime @default(now())
 }
 
+model HistoricalPrice {
+  id        String   @id @default(uuid())
+  symbol    String
+  date      DateTime // normalized to end of month/day
+  price     Float
+  currency  String
+
+  @@unique([symbol, date])
+}
+
 model Setting {
   key   String @id
   value String

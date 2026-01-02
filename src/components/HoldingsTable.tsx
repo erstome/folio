@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Holding } from './PortfolioCharts'
+import { Holding } from '@/app/types'
 import { cn } from '@/lib/utils'
 import { ArrowUpDown, Search, Trash2 } from 'lucide-react'
 import { deleteAsset } from '@/app/actions'
@@ -145,8 +145,22 @@ export function HoldingsTable({ holdings, currency }: { holdings: Holding[], cur
                                             {(asset.gain || 0) >= 0 ? '+' : ''}{formatCurrency(asset.gain || 0)} ({formatPct(asset.gainPercent || 0)})
                                         </div>
                                     </td>
-                                    <td className="px-6 py-4 text-right text-foreground/80">
-                                        {formatCurrency(asset.currentPrice || 0)}
+                                    <td className="px-6 py-4 text-right">
+                                        <div className="text-foreground/80 font-medium">
+                                            {formatCurrency(asset.currentPrice || 0)}
+                                        </div>
+                                        {asset.lastUpdate && (
+                                            <div className="text-[10px] text-muted-foreground mt-0.5 flex flex-col items-end">
+                                                <span suppressHydrationWarning>
+                                                    {new Date(asset.lastUpdate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                                                </span>
+                                                {asset.isCached && (
+                                                    <span className="text-[9px] bg-amber-500/10 text-amber-500 px-1 rounded border border-amber-500/20 mt-0.5">
+                                                        Cached
+                                                    </span>
+                                                )}
+                                            </div>
+                                        )}
                                     </td>
                                     <td className="px-6 py-4 text-right">
                                         <div className="text-foreground">{asset.quantity}</div>

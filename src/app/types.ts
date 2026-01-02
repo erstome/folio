@@ -37,4 +37,6 @@ export type Holding = {
     marketValue?: number
     gain?: number
     gainPercent?: number
+    lastUpdate?: Date | string | null
+    isCached?: boolean
 }

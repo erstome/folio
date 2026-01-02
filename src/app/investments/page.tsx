@@ -1,11 +1,11 @@
-
 import { Navbar } from "@/components/Navbar";
-import { PortfolioCharts, Holding } from "@/components/PortfolioCharts";
+import { PortfolioCharts } from "@/components/PortfolioCharts";
 import { HoldingsTable } from "@/components/HoldingsTable";
 import { RecentTransactions } from "@/components/RecentTransactions";
-import { getPortfolio, getQuotes, getTransactions, updateAssetName } from "../actions";
+import { getPortfolio, getQuotes, getTransactions, updateAssetName, syncHistoricalPrices } from "../actions";
 import { cn } from "@/lib/utils";
 import { LineChart } from 'lucide-react';
+import { Holding } from "@/app/types";
 
 export default async function InvestmentsPage({ searchParams }: { searchParams: { currency?: string } }) {
     const targetCurrency = searchParams?.currency || 'EUR';
@@ -17,11 +17,16 @@ export default async function InvestmentsPage({ searchParams }: { searchParams: 
         getTransactions()
     ]);
 
-    const uniqueSymbols = Array.from(new Set(rawPortfolio.map(p => p.symbol)));
+    const syncSymbols = Array.from(new Set(rawPortfolio.map(p => p.symbol)));
+
+    // 2. Trigger Background Syncs (Historical)
+    // We don't await this to keep the page load fast.
+    // Given the 429 risk, running it here is a good compromise.
+    syncHistoricalPrices(syncSymbols).catch(err => console.error("Background sync failed:", err));
 
     // 2. Fetch Quotes & Rates
     const [quotes, rateResult] = await Promise.all([
-        getQuotes(uniqueSymbols),
+        getQuotes(syncSymbols),
         getQuotes(['EURUSD=X'])
     ]);
 
@@ -69,6 +74,8 @@ export default async function InvestmentsPage({ searchParams }: { searchParams: 
             marketValue: currentValue,
             gain,
             gainPercent,
+            lastUpdate: quote.lastUpdate,
+            isCached: quote.isCached
         }
     });
 
@@ -119,7 +126,6 @@ export default async function InvestmentsPage({ searchParams }: { searchParams: 
                             <h2 className="text-xl font-bold text-white mb-6">Recent Activity</h2>
                             <RecentTransactions
                                 transactions={transactions}
-                                assets={enrichedPortfolio}
                             />
                         </div>
                     </div>
