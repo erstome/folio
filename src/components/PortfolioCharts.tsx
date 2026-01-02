@@ -2,18 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts'
-
-export type Holding = {
-    symbol: string
-    name: string
-    quantity: number
-    avgCost: number
-    totalCost: number
-    currentPrice?: number
-    marketValue?: number
-    gain?: number
-    gainPercent?: number
-}
+import { Holding } from '@/app/types'
 
 const COLORS = ['#6366f1', '#8b5cf6', '#d946ef', '#ec4899', '#f43f5e', '#f97316', '#eab308', '#22c55e', '#06b6d4', '#3b82f6']
 
@@ -29,7 +18,7 @@ export function PortfolioCharts({ holdings, currency = 'USD' }: { holdings: Hold
 
     if (holdings.length === 0) {
         return (
-            <div className="flex flex-col items-center justify-center h-full text-zinc-500 text-sm">
+            <div className="flex flex-col items-center justify-center h-full text-muted-foreground text-sm">
                 <p>No data to display</p>
             </div>
         )
@@ -70,13 +59,13 @@ export function PortfolioCharts({ holdings, currency = 'USD' }: { holdings: Hold
         <div className="relative w-full h-full">
             {/* Center Text Overlay */}
             <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none z-10">
-                <div className="text-xs text-zinc-500 font-medium mb-1 px-4 text-center truncate max-w-[180px]">
+                <div className="text-xs text-muted-foreground font-medium mb-1 px-4 text-center truncate max-w-[180px]">
                     {mainLabel}
                 </div>
-                <div className="text-2xl font-bold text-white tracking-tight">
+                <div className="text-2xl font-bold text-foreground tracking-tight">
                     {formatCurrency(mainValue)}
                 </div>
-                <div className={`text-sm font-medium mt-1 ${isPositive ? 'text-emerald-400' : 'text-rose-400'}`}>
+                <div className={`text-sm font-medium mt-1 ${isPositive ? 'text-emerald-500' : 'text-rose-500'}`}>
                     {isPositive ? '+' : ''}{formatCurrency(gainValue)} ({formatPct(gainPct)})
                 </div>
             </div>
@@ -98,15 +87,20 @@ export function PortfolioCharts({ holdings, currency = 'USD' }: { holdings: Hold
                             <Cell
                                 key={`cell-${index}`}
                                 fill={COLORS[index % COLORS.length]}
-                                stroke={selectedIndex === index ? '#fff' : 'rgba(0,0,0,0)'}
+                                stroke={selectedIndex === index ? 'var(--foreground)' : 'rgba(0,0,0,0)'}
                                 strokeWidth={2}
                                 className="transition-all duration-300 hover:opacity-80"
                             />
                         ))}
                     </Pie>
                     <Tooltip
-                        contentStyle={{ backgroundColor: '#18181b', borderColor: '#27272a', borderRadius: '12px', color: '#fff' }}
-                        itemStyle={{ color: '#fff' }}
+                        contentStyle={{
+                            backgroundColor: 'var(--card)',
+                            borderColor: 'var(--border)',
+                            borderRadius: '12px',
+                            color: 'var(--foreground)'
+                        }}
+                        itemStyle={{ color: 'var(--foreground)' }}
                         formatter={(value: number, name: string, entry: any) => [formatCurrency(value), entry.payload.name]}
                     />
                 </PieChart>

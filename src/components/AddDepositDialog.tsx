@@ -2,8 +2,7 @@ import { useState, useEffect } from 'react'
 import { createPortal } from 'react-dom'
 import { X } from 'lucide-react'
 import { addDeposit } from '@/app/actions'
-
-import { DepositData } from '@/app/actions'
+import { DepositData } from '@/app/types'
 
 interface AddDepositDialogProps {
     isOpen: boolean
@@ -88,10 +87,10 @@ export function AddDepositDialog({ isOpen, onClose, initialData, renewalValues }
 
     return createPortal(
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-            <div className="bg-zinc-900 border border-zinc-800 rounded-xl w-full max-w-md shadow-2xl p-6 space-y-6">
+            <div className="bg-card border border-border rounded-xl w-full max-w-md shadow-2xl p-6 space-y-6">
                 <div className="flex justify-between items-center">
-                    <h2 className="text-xl font-bold text-white">{initialData ? 'Renew Deposit' : 'New Term Deposit'}</h2>
-                    <button onClick={onClose} className="text-zinc-500 hover:text-white transition-colors">
+                    <h2 className="text-xl font-bold text-foreground">{initialData ? 'Renew Deposit' : 'New Term Deposit'}</h2>
+                    <button onClick={onClose} className="text-muted-foreground hover:text-foreground transition-colors">
                         <X className="w-5 h-5" />
                     </button>
                 </div>
@@ -106,20 +105,20 @@ export function AddDepositDialog({ isOpen, onClose, initialData, renewalValues }
 
                     {/* Rollover Toggle */}
                     {renewalValues && (
-                        <div className="bg-zinc-950/50 p-3 rounded-lg border border-zinc-800 space-y-2">
-                            <label className="text-xs font-medium text-zinc-400 uppercase tracking-wider">Rollover Amount</label>
+                        <div className="bg-background p-3 rounded-lg border border-border space-y-2">
+                            <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Rollover Amount</label>
                             <div className="flex gap-2">
                                 <button
                                     type="button"
                                     onClick={() => setRolloverType('GROSS')}
-                                    className={`flex-1 py-1.5 px-3 rounded-md text-xs font-bold transition-colors border ${rolloverType === 'GROSS' ? 'bg-indigo-600 border-indigo-500 text-white' : 'bg-zinc-800 border-zinc-700 text-zinc-400 hover:text-zinc-300'}`}
+                                    className={`flex-1 py-1.5 px-3 rounded-md text-xs font-bold transition-colors border ${rolloverType === 'GROSS' ? 'bg-indigo-600 border-indigo-500 text-white' : 'bg-muted border-border text-muted-foreground hover:text-foreground'}`}
                                 >
                                     GROSS: {renewalValues.gross.toFixed(2)}
                                 </button>
                                 <button
                                     type="button"
                                     onClick={() => setRolloverType('NET')}
-                                    className={`flex-1 py-1.5 px-3 rounded-md text-xs font-bold transition-colors border ${rolloverType === 'NET' ? 'bg-emerald-600 border-emerald-500 text-white' : 'bg-zinc-800 border-zinc-700 text-zinc-400 hover:text-zinc-300'}`}
+                                    className={`flex-1 py-1.5 px-3 rounded-md text-xs font-bold transition-colors border ${rolloverType === 'NET' ? 'bg-emerald-600 border-emerald-500 text-white' : 'bg-muted border-border text-muted-foreground hover:text-foreground'}`}
                                 >
                                     NET (28% Tax): {renewalValues.net.toFixed(2)}
                                 </button>
@@ -128,11 +127,11 @@ export function AddDepositDialog({ isOpen, onClose, initialData, renewalValues }
                     )}
 
                     <div className="space-y-2">
-                        <label className="text-xs font-medium text-zinc-400">Bank Name</label>
+                        <label className="text-xs font-medium text-muted-foreground">Bank Name</label>
                         <input
                             type="text"
                             name="bankName"
-                            className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-indigo-500/50 placeholder-zinc-600"
+                            className="w-full bg-background border border-border rounded-lg px-3 py-2 text-foreground focus:outline-none focus:ring-2 focus:ring-indigo-500/50 placeholder-muted-foreground"
                             placeholder="e.g. Santander"
                             defaultValue={initialData?.bankName}
                             required
@@ -141,22 +140,22 @@ export function AddDepositDialog({ isOpen, onClose, initialData, renewalValues }
 
                     <div className="grid grid-cols-2 gap-4">
                         <div className="space-y-2">
-                            <label className="text-xs font-medium text-zinc-400">Amount</label>
+                            <label className="text-xs font-medium text-muted-foreground">Amount</label>
                             <input
                                 type="number"
                                 name="amount"
-                                step="0.01"
-                                className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
+                                step="any"
+                                className="w-full bg-background border border-border rounded-lg px-3 py-2 text-foreground focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
                                 defaultValue={currentAmount}
                                 key={currentAmount} // Force re-render on toggle
                                 required
                             />
                         </div>
                         <div className="space-y-2">
-                            <label className="text-xs font-medium text-zinc-400">Currency</label>
+                            <label className="text-xs font-medium text-muted-foreground">Currency</label>
                             <select
                                 name="currency"
-                                className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
+                                className="w-full bg-background border border-border rounded-lg px-3 py-2 text-foreground focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
                                 defaultValue={initialData?.currency || 'EUR'}
                             >
                                 <option value="EUR">EUR</option>
@@ -166,12 +165,12 @@ export function AddDepositDialog({ isOpen, onClose, initialData, renewalValues }
                     </div>
 
                     <div className="space-y-2">
-                        <label className="text-xs font-medium text-zinc-400">Interest Rate (TAN %)</label>
+                        <label className="text-xs font-medium text-muted-foreground">Interest Rate (TAN %)</label>
                         <input
                             type="number"
                             name="interestRate"
                             step="0.01"
-                            className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
+                            className="w-full bg-background border border-border rounded-lg px-3 py-2 text-foreground focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
                             placeholder="e.g. 2.50"
                             defaultValue={initialData?.interestRate}
                             required
@@ -180,21 +179,21 @@ export function AddDepositDialog({ isOpen, onClose, initialData, renewalValues }
 
                     <div className="grid grid-cols-2 gap-4">
                         <div className="space-y-2">
-                            <label className="text-xs font-medium text-zinc-400">Start Date</label>
+                            <label className="text-xs font-medium text-muted-foreground">Start Date</label>
                             <input
                                 type="date"
                                 name="startDate"
-                                className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
+                                className="w-full bg-background border border-border rounded-lg px-3 py-2 text-foreground focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
                                 defaultValue={defaultStart}
                                 required
                             />
                         </div>
                         <div className="space-y-2">
-                            <label className="text-xs font-medium text-zinc-400">Maturity Date</label>
+                            <label className="text-xs font-medium text-muted-foreground">Maturity Date</label>
                             <input
                                 type="date"
                                 name="maturityDate"
-                                className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
+                                className="w-full bg-background border border-border rounded-lg px-3 py-2 text-foreground focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
                                 required
                             />
                         </div>

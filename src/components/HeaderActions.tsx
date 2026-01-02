@@ -3,24 +3,42 @@
 import { useState, useEffect } from 'react'
 import { createPortal } from 'react-dom'
 import { usePathname } from 'next/navigation'
-import { Plus, LineChart, Landmark, PiggyBank, X } from 'lucide-react'
+import { Plus, LineChart, Landmark, PiggyBank, X, Sun, Moon, Database } from 'lucide-react'
 import { AddTransactionDialog } from './AddTransactionDialog'
 import { AddDepositDialog } from './AddDepositDialog'
 import { AddPensionDialog } from './AddPensionDialog'
+import { DataManagementDialog } from './DataManagementDialog'
 
 export function HeaderActions() {
     const pathname = usePathname()
     const [isMenuOpen, setIsMenuOpen] = useState(false)
     const [mounted, setMounted] = useState(false)
+    const [theme, setTheme] = useState<'light' | 'dark'>('dark')
 
     useEffect(() => {
         setMounted(true);
+        const savedTheme = localStorage.getItem('folio-theme') as 'light' | 'dark';
+        if (savedTheme) {
+            setTheme(savedTheme);
+            document.documentElement.classList.toggle('dark', savedTheme === 'dark');
+        } else {
+            // Default to dark as it matches the app's vibe
+            document.documentElement.classList.add('dark');
+        }
     }, []);
+
+    const toggleTheme = () => {
+        const newTheme = theme === 'light' ? 'dark' : 'light';
+        setTheme(newTheme);
+        localStorage.setItem('folio-theme', newTheme);
+        document.documentElement.classList.toggle('dark', newTheme === 'dark');
+    };
 
     // Dialog States
     const [isTransactionOpen, setIsTransactionOpen] = useState(false)
     const [isDepositOpen, setIsDepositOpen] = useState(false)
     const [isPensionOpen, setIsPensionOpen] = useState(false)
+    const [isDataManagementOpen, setIsDataManagementOpen] = useState(false)
 
     // Specific contexts
     const isDashboard = pathname === '/'
@@ -63,21 +81,36 @@ export function HeaderActions() {
 
     return (
         <>
-            <button
-                onClick={config.action}
-                className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors text-white ${config.color}`}
-            >
-                <Plus className="w-4 h-4" />
-                {config.label}
-            </button>
+            <div className="flex items-center gap-2">
+                <button
+                    onClick={() => setIsDataManagementOpen(true)}
+                    className="p-2 rounded-lg bg-muted text-muted-foreground hover:bg-muted/80 hover:text-foreground transition-colors"
+                    title="Data Management (Backup/Restore)"
+                >
+                    <Database className="w-5 h-5" />
+                </button>
+                <button
+                    onClick={toggleTheme}
+                    className="p-2 rounded-lg bg-muted text-muted-foreground hover:bg-muted/80 hover:text-foreground transition-colors"
+                >
+                    {theme === 'light' ? <Moon className="w-5 h-5" /> : <Sun className="w-5 h-5" />}
+                </button>
+                <button
+                    onClick={config.action}
+                    className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors text-white ${config.color}`}
+                >
+                    <Plus className="w-4 h-4" />
+                    {config.label}
+                </button>
+            </div>
 
             {/* Dashboard Selection Menu Modal */}
             {isMenuOpen && mounted && createPortal(
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-in fade-in duration-200">
-                    <div className="bg-zinc-900 border border-zinc-800 rounded-xl w-full max-w-sm p-6 shadow-2xl space-y-4">
+                    <div className="bg-card border border-border rounded-xl w-full max-w-sm p-6 shadow-2xl space-y-4">
                         <div className="flex justify-between items-center mb-2">
-                            <h2 className="text-lg font-bold text-white">Add New</h2>
-                            <button onClick={() => setIsMenuOpen(false)} className="text-zinc-500 hover:text-white transition-colors">
+                            <h2 className="text-lg font-bold text-foreground">Add New</h2>
+                            <button onClick={() => setIsMenuOpen(false)} className="text-muted-foreground hover:text-foreground transition-colors">
                                 <X className="w-5 h-5" />
                             </button>
                         </div>
@@ -85,50 +118,50 @@ export function HeaderActions() {
                         <div className="space-y-3">
                             <button
                                 onClick={() => { setIsMenuOpen(false); setIsTransactionOpen(true); }}
-                                className="w-full p-4 bg-zinc-950/50 border border-zinc-800 hover:bg-zinc-900 rounded-xl transition-all group flex items-center justify-between"
+                                className="w-full p-4 bg-background border border-border hover:bg-muted/50 rounded-xl transition-all group flex items-center justify-between"
                             >
                                 <div className="flex items-center gap-4">
                                     <div className="w-10 h-10 rounded-lg bg-indigo-500/10 text-indigo-500 flex items-center justify-center group-hover:scale-110 transition-transform">
                                         <LineChart className="w-5 h-5" />
                                     </div>
                                     <div className="text-left">
-                                        <div className="font-semibold text-white">Investment</div>
-                                        <div className="text-xs text-zinc-500">Stock, ETF or Crypto</div>
+                                        <div className="font-semibold text-foreground">Investment</div>
+                                        <div className="text-xs text-muted-foreground">Stock, ETF or Crypto</div>
                                     </div>
                                 </div>
-                                <Plus className="w-5 h-5 text-zinc-600 group-hover:text-white transition-colors" />
+                                <Plus className="w-5 h-5 text-muted-foreground group-hover:text-foreground transition-colors" />
                             </button>
 
                             <button
                                 onClick={() => { setIsMenuOpen(false); setIsDepositOpen(true); }}
-                                className="w-full p-4 bg-zinc-950/50 border border-zinc-800 hover:bg-zinc-900 rounded-xl transition-all group flex items-center justify-between"
+                                className="w-full p-4 bg-background border border-border hover:bg-muted/50 rounded-xl transition-all group flex items-center justify-between"
                             >
                                 <div className="flex items-center gap-4">
                                     <div className="w-10 h-10 rounded-lg bg-emerald-500/10 text-emerald-500 flex items-center justify-center group-hover:scale-110 transition-transform">
                                         <Landmark className="w-5 h-5" />
                                     </div>
                                     <div className="text-left">
-                                        <div className="font-semibold text-white">Bank Deposit</div>
-                                        <div className="text-xs text-zinc-500">Term or Savings</div>
+                                        <div className="font-semibold text-foreground">Bank Deposit</div>
+                                        <div className="text-xs text-muted-foreground">Term or Savings</div>
                                     </div>
                                 </div>
-                                <Plus className="w-5 h-5 text-zinc-600 group-hover:text-white transition-colors" />
+                                <Plus className="w-5 h-5 text-muted-foreground group-hover:text-foreground transition-colors" />
                             </button>
 
                             <button
                                 onClick={() => { setIsMenuOpen(false); setIsPensionOpen(true); }}
-                                className="w-full p-4 bg-zinc-950/50 border border-zinc-800 hover:bg-zinc-900 rounded-xl transition-all group flex items-center justify-between"
+                                className="w-full p-4 bg-background border border-border hover:bg-muted/50 rounded-xl transition-all group flex items-center justify-between"
                             >
                                 <div className="flex items-center gap-4">
                                     <div className="w-10 h-10 rounded-lg bg-amber-500/10 text-amber-500 flex items-center justify-center group-hover:scale-110 transition-transform">
                                         <PiggyBank className="w-5 h-5" />
                                     </div>
                                     <div className="text-left">
-                                        <div className="font-semibold text-white">Pension Fund</div>
-                                        <div className="text-xs text-zinc-500">PPR or Retirement</div>
+                                        <div className="font-semibold text-foreground">Pension Fund</div>
+                                        <div className="text-xs text-muted-foreground">PPR or Retirement</div>
                                     </div>
                                 </div>
-                                <Plus className="w-5 h-5 text-zinc-600 group-hover:text-white transition-colors" />
+                                <Plus className="w-5 h-5 text-muted-foreground group-hover:text-foreground transition-colors" />
                             </button>
                         </div>
                     </div>
@@ -140,6 +173,7 @@ export function HeaderActions() {
             <AddTransactionDialog isOpen={isTransactionOpen} onClose={() => setIsTransactionOpen(false)} />
             <AddDepositDialog isOpen={isDepositOpen} onClose={() => setIsDepositOpen(false)} />
             <AddPensionDialog isOpen={isPensionOpen} onClose={() => setIsPensionOpen(false)} />
+            <DataManagementDialog isOpen={isDataManagementOpen} onClose={() => setIsDataManagementOpen(false)} />
         </>
     )
 }

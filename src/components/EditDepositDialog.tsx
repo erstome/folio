@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 import { createPortal } from 'react-dom'
 import { Pencil, Loader2, X } from 'lucide-react'
 import { updateDeposit } from '@/app/actions'
-import { DepositData } from '@/app/actions'
+import { DepositData } from '@/app/types'
 
 interface EditDepositDialogProps {
     isOpen: boolean
@@ -72,10 +72,10 @@ export function EditDepositDialog({ isOpen, onClose, initialData }: EditDepositD
 
     return createPortal(
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-            <div className="bg-zinc-900 border border-zinc-800 rounded-xl w-full max-w-md shadow-2xl p-6 space-y-6">
+            <div className="bg-card border border-border rounded-xl w-full max-w-md shadow-2xl p-6 space-y-6">
                 <div className="flex justify-between items-center">
-                    <h2 className="text-xl font-bold text-white">Edit Deposit</h2>
-                    <button onClick={onClose} className="text-zinc-500 hover:text-white transition-colors">
+                    <h2 className="text-xl font-bold text-foreground">Edit Deposit</h2>
+                    <button onClick={onClose} className="text-muted-foreground hover:text-foreground transition-colors">
                         <X className="w-5 h-5" />
                     </button>
                 </div>
@@ -88,34 +88,34 @@ export function EditDepositDialog({ isOpen, onClose, initialData }: EditDepositD
 
                 <form onSubmit={handleSubmit} className="space-y-4">
                     <div className="space-y-2">
-                        <label className="text-xs font-medium text-zinc-400">Bank Name</label>
+                        <label className="text-xs font-medium text-muted-foreground">Bank Name</label>
                         <input
                             type="text"
                             name="bankName"
                             defaultValue={initialData.bankName}
-                            className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-indigo-500/50 placeholder-zinc-600"
+                            className="w-full bg-background border border-border rounded-lg px-3 py-2 text-foreground focus:outline-none focus:ring-2 focus:ring-indigo-500/50 placeholder-muted-foreground"
                             required
                         />
                     </div>
 
                     <div className="grid grid-cols-2 gap-4">
                         <div className="space-y-2">
-                            <label className="text-xs font-medium text-zinc-400">Amount</label>
+                            <label className="text-xs font-medium text-muted-foreground">Amount</label>
                             <input
                                 type="number"
                                 name="amount"
-                                step="0.01"
+                                step="any"
                                 defaultValue={initialData.amount}
-                                className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
+                                className="w-full bg-background border border-border rounded-lg px-3 py-2 text-foreground focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
                                 required
                             />
                         </div>
                         <div className="space-y-2">
-                            <label className="text-xs font-medium text-zinc-400">Currency</label>
+                            <label className="text-xs font-medium text-muted-foreground">Currency</label>
                             <select
                                 name="currency"
                                 defaultValue={initialData.currency}
-                                className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
+                                className="w-full bg-background border border-border rounded-lg px-3 py-2 text-foreground focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
                             >
                                 <option value="EUR">EUR</option>
                                 <option value="USD">USD</option>
@@ -124,35 +124,35 @@ export function EditDepositDialog({ isOpen, onClose, initialData }: EditDepositD
                     </div>
 
                     <div className="space-y-2">
-                        <label className="text-xs font-medium text-zinc-400">Interest Rate (TAN %)</label>
+                        <label className="text-xs font-medium text-muted-foreground">Interest Rate (TAN %)</label>
                         <input
                             type="number"
                             name="interestRate"
                             step="0.01"
                             defaultValue={initialData.interestRate}
-                            className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
+                            className="w-full bg-background border border-border rounded-lg px-3 py-2 text-foreground focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
                             required
                         />
                     </div>
 
                     <div className="grid grid-cols-2 gap-4">
                         <div className="space-y-2">
-                            <label className="text-xs font-medium text-zinc-400">Start Date</label>
+                            <label className="text-xs font-medium text-muted-foreground">Start Date</label>
                             <input
                                 type="date"
                                 name="startDate"
                                 defaultValue={initialData.startDate}
-                                className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
+                                className="w-full bg-background border border-border rounded-lg px-3 py-2 text-foreground focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
                                 required
                             />
                         </div>
                         <div className="space-y-2">
-                            <label className="text-xs font-medium text-zinc-400">Maturity Date</label>
+                            <label className="text-xs font-medium text-muted-foreground">Maturity Date</label>
                             <input
                                 type="date"
                                 name="maturityDate"
                                 defaultValue={initialData.maturityDate}
-                                className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
+                                className="w-full bg-background border border-border rounded-lg px-3 py-2 text-foreground focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
                                 required
                             />
                         </div>

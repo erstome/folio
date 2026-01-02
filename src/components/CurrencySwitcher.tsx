@@ -15,12 +15,12 @@ export function CurrencySwitcher() {
     }
 
     return (
-        <div className="flex items-center bg-zinc-900 border border-zinc-800 rounded-lg p-1">
+        <div className="flex items-center bg-card border border-border rounded-lg p-1">
             <button
                 onClick={() => toggleCurrency('USD')}
                 className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${currency === 'USD'
-                    ? 'bg-zinc-800 text-white shadow-sm'
-                    : 'text-zinc-500 hover:text-zinc-300'
+                    ? 'bg-muted text-foreground shadow-sm'
+                    : 'text-muted-foreground hover:text-foreground'
                     }`}
             >
                 USD
@@ -28,8 +28,8 @@ export function CurrencySwitcher() {
             <button
                 onClick={() => toggleCurrency('EUR')}
                 className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${currency === 'EUR'
-                    ? 'bg-zinc-800 text-white shadow-sm'
-                    : 'text-zinc-500 hover:text-zinc-300'
+                    ? 'bg-muted text-foreground shadow-sm'
+                    : 'text-muted-foreground hover:text-foreground'
                     }`}
             >
                 EUR

@@ -22,6 +22,9 @@ model Asset {
   bankName     String?   // For Deposits ("Santander", "CGD")
   isTaxAdvantaged Boolean @default(false) // For Pensions/PPR
   manualPrice     Float?   // For Manual Assets (Pensions): Current Unit Price
+  lastPrice       Float?   // Cache for current market price
+  lastCurrency    String?  // Cache for market currency (USD, EUR, etc.)
+  lastUpdate      DateTime? // When the cache was last updated
 }
 model Transaction {
   id        String   @id @default(uuid())
@@ -33,4 +36,9 @@ model Transaction {
   price     Float // Price per share
   date      DateTime @default(now())
   createdAt DateTime @default(now())
+}
+
+model Setting {
+  key   String @id
+  value String
 }

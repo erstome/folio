@@ -49,7 +49,7 @@ export function DepositCard({ deposit }: { deposit: Deposit }) {
 
     return (
         <>
-            <div className={`bg-zinc-900 border rounded-xl p-6 space-y-4 transition-colors group relative ${isMatured ? 'border-emerald-900/50 hover:border-emerald-800/50' : 'border-zinc-800 hover:border-zinc-700'}`}>
+            <div className={`bg-card border rounded-xl p-6 space-y-4 transition-colors group relative ${isMatured ? 'border-emerald-500/50 hover:border-emerald-500' : 'border-border hover:border-border/80'}`}>
                 <div className="absolute top-4 right-4 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                     {isMatured && (
                         <button
@@ -70,7 +70,7 @@ export function DepositCard({ deposit }: { deposit: Deposit }) {
                     </button>
                     <button
                         onClick={() => setIsEditOpen(true)}
-                        className="p-2 text-zinc-500 hover:text-white bg-zinc-800/50 hover:bg-zinc-800 rounded-lg transition-colors"
+                        className="p-2 text-muted-foreground hover:text-foreground bg-muted hover:bg-muted/80 rounded-lg transition-colors"
                         title="Edit Deposit"
                     >
                         <Pencil className="w-4 h-4" />
@@ -83,60 +83,60 @@ export function DepositCard({ deposit }: { deposit: Deposit }) {
                             <Landmark className="w-5 h-5" />
                         </div>
                         <div>
-                            <h3 className="font-semibold text-white">{deposit.bankName}</h3>
-                            <div className="text-xs text-zinc-500 flex items-center gap-1">
+                            <h3 className="font-semibold text-foreground">{deposit.bankName}</h3>
+                            <div className="text-xs text-muted-foreground flex items-center gap-1">
                                 {deposit.name}
                             </div>
                         </div>
                     </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-4 py-4 border-t border-b border-zinc-800/50">
+                <div className="grid grid-cols-2 gap-4 py-4 border-t border-b border-border/50">
                     <div className="space-y-1">
-                        <div className="text-xs text-zinc-500 uppercase tracking-wider">Principal</div>
-                        <div className="font-mono text-zinc-300">{formatCurrency(deposit.principal, deposit.currency)}</div>
+                        <div className="text-xs text-muted-foreground uppercase tracking-wider">Principal</div>
+                        <div className="font-mono text-foreground/80">{formatCurrency(deposit.principal, deposit.currency)}</div>
                     </div>
                     <div className="space-y-1 text-right">
-                        <div className="text-xs text-zinc-500 uppercase tracking-wider">Rate (TAN)</div>
+                        <div className="text-xs text-muted-foreground uppercase tracking-wider">Rate (TAN)</div>
                         <div className="font-mono text-zinc-300">{deposit.rate}%</div>
                     </div>
                     <div className="space-y-1">
-                        <div className="text-xs text-zinc-500 uppercase tracking-wider flex items-center gap-1">
+                        <div className="text-xs text-muted-foreground uppercase tracking-wider flex items-center gap-1">
                             <Calendar className="w-3 h-3" /> Start
                         </div>
-                        <div className="text-zinc-400 text-sm">{formatDate(deposit.startDate)}</div>
+                        <div className="text-muted-foreground text-sm">{formatDate(deposit.startDate)}</div>
                     </div>
                     <div className="space-y-1 text-right">
-                        <div className="text-xs text-zinc-500 uppercase tracking-wider flex items-center justify-end gap-1">
+                        <div className="text-xs text-muted-foreground uppercase tracking-wider flex items-center justify-end gap-1">
                             <Clock className="w-3 h-3" /> Maturity
                         </div>
-                        <div className="text-zinc-400 text-sm">{formatDate(deposit.maturityDate)}</div>
+                        <div className="text-muted-foreground text-sm">{formatDate(deposit.maturityDate)}</div>
                     </div>
                 </div>
 
-                <div className="flex items-center justify-between bg-zinc-950/50 p-3 rounded-lg border border-zinc-800/50">
+                <div className="flex items-center justify-between bg-background p-3 rounded-lg border border-border/50">
                     <div className="flex items-center gap-2">
-                        <span className="text-xs text-zinc-400 font-medium uppercase tracking-wider">Interest</span>
+                        <span className="text-xs text-muted-foreground font-medium uppercase tracking-wider">Interest</span>
                         <button
                             onClick={() => setShowNet(!showNet)}
-                            className={`text-[10px] px-1.5 py-0.5 rounded font-bold transition-colors border ${showNet ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20' : 'bg-zinc-800 text-zinc-500 border-zinc-700'}`}
+                            className={`text-[10px] px-1.5 py-0.5 rounded font-bold transition-colors border ${showNet ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20' : 'bg-muted text-muted-foreground border-border'}`}
                         >
                             {showNet ? 'NET (28%)' : 'GROSS'}
                         </button>
                     </div>
                     <div className="text-right">
-                        <div className="text-sm font-bold text-white">
+                        <div className="text-sm font-bold text-foreground">
                             +{formatCurrency(showNet ? netInterest : deposit.accruedInterest, deposit.currency)}
                         </div>
                     </div>
                 </div>
 
                 <div className="space-y-2">
-                    <div className="flex justify-between text-xs text-zinc-500">
+                    <div className="flex justify-between text-xs text-muted-foreground">
                         <span>Progress</span>
                         <span>{Math.round(deposit.progress)}%</span>
                     </div>
-                    <div className="h-2 bg-zinc-800 rounded-full overflow-hidden">
+                    <div className="h-2 bg-muted rounded-full overflow-hidden">
                         <div
                             className={`h-full transition-all duration-500 ease-in-out ${isMatured ? 'bg-emerald-500' : 'bg-indigo-500'}`}
                             style={{ width: `${deposit.progress}%` }}

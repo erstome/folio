@@ -2,30 +2,36 @@
 
 import { prisma } from '@/lib/db'
 import { revalidatePath } from 'next/cache'
-import YahooFinance from 'yahoo-finance2'
+import path from 'path'
+import { TransactionData, DepositData, PensionData } from './types'
+import { yahooFinance, getOAuthClient, google, fs, DB_PATH } from '@/lib/server-services'
 
-const yahooFinance = new YahooFinance({
-    suppressNotices: ['yahooSurvey']
-})
+// --- Settings Actions ---
 
-export type TransactionData = {
-    symbol: string
-    type: 'BUY' | 'SELL'
-    quantity: number
-    price: number
-    currency?: string
-    date: Date
-    assetName?: string | null
+export async function getSettings() {
+    const settings = await prisma.setting.findMany()
+    return settings.reduce((acc: Record<string, string>, curr: { key: string, value: string }) => ({ ...acc, [curr.key]: curr.value }), {} as Record<string, string>)
 }
 
-export type DepositData = {
-    amount: number
-    bankName: string
-    name?: string
-    currency: string
-    interestRate: number
-    startDate: Date
-    maturityDate: Date
+export async function updateSettings(data: Record<string, string>) {
+    for (const [key, value] of Object.entries(data)) {
+        await prisma.setting.upsert({
+            where: { key },
+            update: { value },
+            create: { key, value }
+        })
+    }
+    revalidatePath('/')
+    return { success: true }
+}
+
+async function getCloudCredentials() {
+    const settings = await getSettings()
+    return {
+        clientId: settings.GOOGLE_CLIENT_ID || process.env.GOOGLE_CLIENT_ID,
+        clientSecret: settings.GOOGLE_CLIENT_SECRET || process.env.GOOGLE_CLIENT_SECRET,
+        baseUrl: settings.NEXT_PUBLIC_BASE_URL || process.env.NEXT_PUBLIC_BASE_URL
+    }
 }
 
 export async function addTransaction(data: TransactionData) {
@@ -137,15 +143,15 @@ export async function getPortfolio() {
     // Ideally use historical rates, but for MVP current rate is acceptable fallback.
     // 'EUR=X' is approx USD/EUR or EUR/USD. Let's check getQuotes output from previous step.
     // Actually, let's fetch it.
-    let eurUsdRate = 1;
+    let eurUsdRate = 1.1; // Sensible default
     try {
-        const rateQuote = await yahooFinance.quote('EURUSD=X');
-        // This returns ~1.17 (USD per 1 EUR)
-        if (rateQuote && rateQuote.regularMarketPrice) {
-            eurUsdRate = rateQuote.regularMarketPrice;
+        const rateResult = await getQuotes(['EURUSD=X']);
+        const rateQuote = rateResult['EURUSD=X'];
+        if (rateQuote && rateQuote.price) {
+            eurUsdRate = rateQuote.price;
         }
     } catch (e) {
-        console.warn("Failed to fetch exchange rate, using 1:1", e)
+        console.warn("Failed to fetch exchange rate via getQuotes, using fallback 1.1", e)
     }
 
     // Calculate holdings
@@ -205,25 +211,74 @@ export async function getQuotes(symbols: string[]) {
 
     try {
         const result = await yahooFinance.quote(symbols)
-        console.log(`[getQuotes] Raw result:`, JSON.stringify(result, null, 2))
-
         const quotes = Array.isArray(result) ? result : [result]
+
+        // Update cache in database for each successful quote
+        for (const q of quotes) {
+            if (q && (q.regularMarketPrice || q.currentPrice)) {
+                await prisma.asset.update({
+                    where: { symbol: q.symbol },
+                    data: {
+                        lastPrice: q.regularMarketPrice || q.currentPrice,
+                        lastCurrency: q.currency,
+                        lastUpdate: new Date()
+                    }
+                }).catch(e => console.error(`[getQuotes] Failed to update cache for ${q.symbol}`, e))
+            }
+        }
 
         // Map array to object for easier lookup
         return quotes.reduce((acc: any, q: any) => {
-            if (!q) return acc; // Skip nulls
+            if (!q) return acc;
             acc[q.symbol] = {
-                price: q.regularMarketPrice || q.currentPrice || 0, // Fallback fields
-                currency: q.currency, // e.g. 'USD', 'EUR'
+                price: q.regularMarketPrice || q.currentPrice || 0,
+                currency: q.currency,
                 change: q.regularMarketChange || 0,
                 changePercent: q.regularMarketChangePercent || 0,
                 name: q.longName || q.shortName || q.symbol
             }
             return acc
         }, {})
-    } catch (error) {
+    } catch (error: any) {
         console.error("[getQuotes] Failed to fetch quotes:", error)
-        return {}
+
+        // Fallback: Try to get cached prices from database
+        try {
+            const cachedAssets = await prisma.asset.findMany({
+                where: { symbol: { in: symbols } },
+                select: {
+                    symbol: true,
+                    lastPrice: true,
+                    lastCurrency: true,
+                    name: true,
+                    transactions: {
+                        orderBy: { date: 'desc' },
+                        take: 1
+                    }
+                }
+            })
+
+            return cachedAssets.reduce((acc: any, asset: any) => {
+                // Priority: lastPrice > last transaction price > 0
+                const fallbackPrice = asset.lastPrice || (asset.transactions[0]?.price) || 0;
+                const fallbackCurrency = asset.lastCurrency || (asset.transactions[0]?.currency) || 'USD';
+
+                if (fallbackPrice > 0) {
+                    acc[asset.symbol] = {
+                        price: fallbackPrice,
+                        currency: fallbackCurrency,
+                        change: 0,
+                        changePercent: 0,
+                        name: asset.name || asset.symbol,
+                        isCached: true
+                    }
+                }
+                return acc;
+            }, {})
+        } catch (dbError) {
+            console.error("[getQuotes] Failed to fetch from cache/history:", dbError)
+            return {}
+        }
     }
 }
 
@@ -375,14 +430,7 @@ export async function getDeposits() {
     })
 }
 
-export type PensionData = {
-    name: string
-    currentValue: number
-    quantity: number
-    investedAmount: number
-    currency: string
-    isTaxAdvantaged: boolean
-}
+const now = new Date()
 
 export async function addPension(data: PensionData) {
     const { name, currentValue, quantity, investedAmount, currency, isTaxAdvantaged } = data
@@ -576,5 +624,157 @@ export async function deleteTransaction(id: string) {
     } catch (e) {
         console.error("Failed to delete transaction", e)
         return { success: false }
+    }
+}
+
+// --- Cloud Backup Actions ---
+
+export async function getGoogleAuthUrl() {
+    const credentials = await getCloudCredentials()
+    if (!credentials.clientId) {
+        throw new Error('Google Client ID is not configured. Please go to Cloud Sync settings.')
+    }
+    const oauth2Client = getOAuthClient(credentials)
+    const url = oauth2Client.generateAuthUrl({
+        access_type: 'offline',
+        scope: ['https://www.googleapis.com/auth/drive.file'],
+        prompt: 'consent'
+    })
+    return url
+}
+
+export async function backupToGoogleDrive(tokens: any) {
+    try {
+        const credentials = await getCloudCredentials()
+        const oauth2Client = getOAuthClient(credentials)
+        oauth2Client.setCredentials(tokens)
+        const drive = google.drive({ version: 'v3', auth: oauth2Client })
+
+        // 1. Read the DB file
+        const fileContent = fs.readFileSync(DB_PATH)
+
+        // 2. Check for existing backup file
+        const res = await drive.files.list({
+            q: "name = 'folio_backup.db' and trashed = false",
+            fields: 'files(id, name)',
+            spaces: 'drive',
+        })
+
+        const existingFile = res.data.files?.[0]
+
+        if (existingFile?.id) {
+            // Update
+            await drive.files.update({
+                fileId: existingFile.id,
+                media: {
+                    mimeType: 'application/x-sqlite3',
+                    body: fs.createReadStream(DB_PATH)
+                },
+            })
+            return { success: true, message: 'Backup updated' }
+        } else {
+            // Create
+            await drive.files.create({
+                requestBody: {
+                    name: 'folio_backup.db',
+                    mimeType: 'application/x-sqlite3',
+                },
+                media: {
+                    mimeType: 'application/x-sqlite3',
+                    body: fs.createReadStream(DB_PATH)
+                },
+            })
+            return { success: true, message: 'New backup created' }
+        }
+    } catch (e) {
+        console.error("Backup failed", e)
+        return { success: false, error: e instanceof Error ? e.message : 'Unknown error' }
+    }
+}
+
+export async function restoreFromGoogleDrive(tokens: any) {
+    try {
+        const credentials = await getCloudCredentials()
+        const oauth2Client = getOAuthClient(credentials)
+        oauth2Client.setCredentials(tokens)
+        const drive = google.drive({ version: 'v3', auth: oauth2Client })
+
+        // 1. Find the backup file
+        const res = await drive.files.list({
+            q: "name = 'folio_backup.db' and trashed = false",
+            fields: 'files(id, name)',
+            spaces: 'drive',
+        })
+
+        const file = res.data.files?.[0]
+        if (!file?.id) {
+            return { success: false, error: 'No backup file found in Google Drive.' }
+        }
+
+        // 2. Download the file
+        const response = await drive.files.get(
+            { fileId: file.id, alt: 'media' },
+            { responseType: 'stream' }
+        )
+
+        const dest = fs.createWriteStream(DB_PATH)
+
+        return new Promise<{ success: boolean, error?: string }>((resolve, reject) => {
+            response.data
+                .on('end', () => {
+                    console.log('Restore downloaded successfully.')
+                    resolve({ success: true })
+                })
+                .on('error', (err) => {
+                    console.error('Download stream error', err)
+                    reject({ success: false, error: err.message })
+                })
+                .pipe(dest)
+        })
+    } catch (e) {
+        console.error("Restore failed", e)
+        return { success: false, error: e instanceof Error ? e.message : 'Unknown error' }
+    }
+}
+// --- Local Backup Actions ---
+
+export async function exportDatabase() {
+    try {
+        const dbContent = fs.readFileSync(DB_PATH)
+        return { success: true, content: dbContent.toString('base64'), filename: 'folio_backup.db' }
+    } catch (e: any) {
+        return { success: false, error: e.message }
+    }
+}
+
+export async function importDatabase(base64Content: string) {
+    try {
+        const buffer = Buffer.from(base64Content, 'base64')
+        fs.writeFileSync(DB_PATH, buffer)
+        revalidatePath('/')
+        return { success: true }
+    } catch (e: any) {
+        return { success: false, error: e.message }
+    }
+}
+
+export async function backupToLocalPath(targetPath: string) {
+    try {
+        // Ensure directory exists
+        const dir = path.dirname(targetPath)
+        if (!fs.existsSync(dir)) {
+            fs.mkdirSync(dir, { recursive: true })
+        }
+
+        // If targetPath is a directory, append default filename
+        let fullPath = targetPath
+        if (fs.existsSync(targetPath) && fs.lstatSync(targetPath).isDirectory()) {
+            fullPath = path.join(targetPath, 'folio_backup.db')
+        }
+
+        fs.copyFileSync(DB_PATH, fullPath)
+        return { success: true, path: fullPath }
+    } catch (e: any) {
+        return { success: false, error: e.message }
     }
 }

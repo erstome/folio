@@ -35,41 +35,41 @@ export default async function DepositsPage() {
                 {/* Header */}
                 <div className="flex items-center justify-between">
                     <div>
-                        <h2 className="text-3xl font-bold text-white tracking-tight flex items-center gap-3">
+                        <h2 className="text-3xl font-bold text-foreground tracking-tight flex items-center gap-3">
                             <Wallet className="w-8 h-8 text-indigo-500" />
                             Bank Deposits
                         </h2>
-                        <p className="text-zinc-400 mt-1">Manage your fixed-term savings and maturity dates.</p>
+                        <p className="text-muted-foreground mt-1">Manage your fixed-term savings and maturity dates.</p>
                     </div>
                 </div>
 
                 {/* Stats */}
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                    <div className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-6">
-                        <div className="text-sm text-zinc-500 font-medium uppercase tracking-wider">Total Deposited</div>
-                        <div className="mt-2 text-3xl font-bold text-white tracking-tight">{formatCurrency(totalDepositsValue)}</div>
+                    <div className="bg-card border border-border rounded-xl p-6">
+                        <div className="text-sm text-muted-foreground font-medium uppercase tracking-wider">Total Deposited</div>
+                        <div className="mt-2 text-3xl font-bold text-foreground tracking-tight">{formatCurrency(totalDepositsValue)}</div>
                     </div>
-                    <div className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-6">
-                        <div className="text-sm text-zinc-500 font-medium uppercase tracking-wider">Accrued (Gross)</div>
+                    <div className="bg-card border border-border rounded-xl p-6">
+                        <div className="text-sm text-muted-foreground font-medium uppercase tracking-wider">Accrued (Gross)</div>
                         <div className="mt-2 text-3xl font-bold text-emerald-500 tracking-tight">+{formatCurrency(totalInterest)}</div>
                     </div>
-                    <div className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-6">
-                        <div className="text-sm text-zinc-500 font-medium uppercase tracking-wider">Accrued (Net)</div>
+                    <div className="bg-card border border-border rounded-xl p-6">
+                        <div className="text-sm text-muted-foreground font-medium uppercase tracking-wider">Accrued (Net)</div>
                         <div className="mt-2 text-3xl font-bold text-emerald-400 tracking-tight">+{formatCurrency(totalInterest * 0.72)}</div>
                     </div>
-                    <div className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-6">
-                        <div className="text-sm text-zinc-500 font-medium uppercase tracking-wider">Active Contracts</div>
-                        <div className="mt-2 text-3xl font-bold text-white tracking-tight">{activeDeposits.length}</div>
+                    <div className="bg-card border border-border rounded-xl p-6">
+                        <div className="text-sm text-muted-foreground font-medium uppercase tracking-wider">Active Contracts</div>
+                        <div className="mt-2 text-3xl font-bold text-foreground tracking-tight">{activeDeposits.length}</div>
                     </div>
                 </div>
 
                 {/* Active List */}
                 <div className="space-y-4">
-                    <h3 className="text-lg font-semibold text-white">Active Deposits</h3>
+                    <h3 className="text-lg font-semibold text-foreground">Active Deposits</h3>
                     {activeDeposits.length === 0 ? (
-                        <div className="text-center py-10 bg-zinc-900/20 border border-zinc-800/50 rounded-xl border-dashed">
-                            <Wallet className="w-8 h-8 text-zinc-600 mx-auto mb-3" />
-                            <h3 className="text-zinc-400 font-medium text-sm">No active deposits</h3>
+                        <div className="text-center py-10 bg-muted/20 border border-border rounded-xl border-dashed">
+                            <Wallet className="w-8 h-8 text-muted-foreground mx-auto mb-3" />
+                            <h3 className="text-muted-foreground font-medium text-sm">No active deposits</h3>
                         </div>
                     ) : (
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">

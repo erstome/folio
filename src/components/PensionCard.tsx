@@ -36,7 +36,7 @@ export function PensionCard({ pension }: { pension: Pension }) {
 
     return (
         <>
-            <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6 space-y-4 hover:border-zinc-700 transition-colors group relative">
+            <div className="bg-card border border-border rounded-xl p-6 space-y-4 hover:border-border/80 transition-colors group relative">
                 <div className="absolute top-4 right-4 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                     <button
                         onClick={handleDelete}
@@ -47,7 +47,7 @@ export function PensionCard({ pension }: { pension: Pension }) {
                     </button>
                     <button
                         onClick={() => setIsEditOpen(true)}
-                        className="p-2 text-zinc-500 hover:text-white bg-zinc-800/50 hover:bg-zinc-800 rounded-lg transition-colors"
+                        className="p-2 text-muted-foreground hover:text-foreground bg-muted hover:bg-muted/80 rounded-lg transition-colors"
                         title="Edit Details"
                     >
                         <Pencil className="w-4 h-4" />
@@ -62,38 +62,38 @@ export function PensionCard({ pension }: { pension: Pension }) {
                 </div>
 
                 <div className="flex items-start justify-between">
-                    <div className="p-3 bg-zinc-800 rounded-lg">
+                    <div className="p-3 bg-muted rounded-lg">
                         <PiggyBank className="w-6 h-6 text-emerald-500" />
                     </div>
                 </div>
 
                 <div>
-                    <h3 className="font-semibold text-white truncate pr-16">{pension.name}</h3>
-                    <p className="text-sm text-zinc-400">{pension.isTaxAdvantaged ? 'Tax Advantaged (PPR)' : 'Retirement Fund'}</p>
+                    <h3 className="font-semibold text-foreground truncate pr-16">{pension.name}</h3>
+                    <p className="text-sm text-muted-foreground">{pension.isTaxAdvantaged ? 'Tax Advantaged (PPR)' : 'Retirement Fund'}</p>
                 </div>
 
                 <div className="pt-2">
-                    <div className="text-xs text-zinc-500 uppercase tracking-wider font-medium">Total Value</div>
-                    <div className="text-2xl font-bold text-white mt-1">
+                    <div className="text-xs text-muted-foreground uppercase tracking-wider font-medium">Total Value</div>
+                    <div className="text-2xl font-bold text-foreground mt-1">
                         {formatCurrency(pension.totalValue)}
                     </div>
                 </div>
 
                 {pension.isTaxAdvantaged && (
-                    <div className="pt-4 border-t border-zinc-800/50 space-y-2">
+                    <div className="pt-4 border-t border-border/50 space-y-2">
                         <div className="flex justify-between text-xs">
-                            <span className="text-zinc-400">Tax Deduction Usage ({new Date().getFullYear()})</span>
-                            <span className={progress >= 100 ? "text-emerald-500 font-medium" : "text-zinc-300"}>
+                            <span className="text-muted-foreground">Tax Deduction Usage ({new Date().getFullYear()})</span>
+                            <span className={progress >= 100 ? "text-emerald-500 font-medium" : "text-foreground/80"}>
                                 {Math.round(progress)}%
                             </span>
                         </div>
-                        <div className="h-2 bg-zinc-800 rounded-full overflow-hidden">
+                        <div className="h-2 bg-muted rounded-full overflow-hidden">
                             <div
                                 className={`h-full rounded-full transition-all duration-500 ${progress >= 100 ? 'bg-emerald-500' : 'bg-indigo-500'}`}
                                 style={{ width: `${progress}%` }}
                             />
                         </div>
-                        <div className="text-xs text-zinc-500">
+                        <div className="text-xs text-muted-foreground">
                             {progress >= 100
                                 ? "Max deduction reached! 🎉"
                                 : `${formatCurrency(remaining)} remaining to max deduction`

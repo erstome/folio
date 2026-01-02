@@ -137,18 +137,18 @@ export default async function Home({ searchParams }: { searchParams: { currency?
                 {/* Header */}
                 <div className="flex items-center justify-between">
                     <div>
-                        <h2 className="text-3xl font-bold text-white tracking-tight flex items-center gap-3">
+                        <h2 className="text-3xl font-bold text-foreground tracking-tight flex items-center gap-3">
                             <LayoutDashboard className="w-8 h-8 text-indigo-500" />
                             Global Dashboard
                         </h2>
-                        <p className="text-zinc-400 mt-1">Your entire net worth at a glance.</p>
+                        <p className="text-muted-foreground mt-1">Your entire net worth at a glance.</p>
                     </div>
                 </div>
 
                 {/* Quick Stats */}
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                     {/* Investments */}
-                    <div className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-6 relative overflow-hidden group">
+                    <div className="bg-card/50 border border-border rounded-xl p-6 relative overflow-hidden group">
                         <div className="absolute top-0 right-0 p-6 opacity-10 group-hover:opacity-20 transition-opacity">
                             <TrendingUp className="w-16 h-16 text-indigo-500" />
                         </div>
@@ -157,9 +157,9 @@ export default async function Home({ searchParams }: { searchParams: { currency?
                                 <div className="p-2 bg-indigo-500/10 rounded-lg text-indigo-500">
                                     <TrendingUp className="w-5 h-5" />
                                 </div>
-                                <h3 className="text-zinc-400 font-medium">Investments</h3>
+                                <h3 className="text-muted-foreground font-medium">Investments</h3>
                             </div>
-                            <div className="text-3xl font-bold text-white tracking-tight">
+                            <div className="text-3xl font-bold text-foreground tracking-tight">
                                 {formatCurrency(totalPortfolioValue)}
                             </div>
                             <div className={`text-sm mt-1 font-medium ${totalInvestmentsGain >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
@@ -170,7 +170,7 @@ export default async function Home({ searchParams }: { searchParams: { currency?
 
                     {/* Deposits */}
                     <Link href="/deposits" className="block">
-                        <div className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-6 relative overflow-hidden group hover:border-zinc-700 transition-colors cursor-pointer">
+                        <div className="bg-card/50 border border-border rounded-xl p-6 relative overflow-hidden group hover:border-border/80 transition-colors cursor-pointer">
                             <div className="absolute top-0 right-0 p-6 opacity-10 group-hover:opacity-20 transition-opacity">
                                 <Wallet className="w-16 h-16 text-emerald-500" />
                             </div>
@@ -179,9 +179,9 @@ export default async function Home({ searchParams }: { searchParams: { currency?
                                     <div className="p-2 bg-emerald-500/10 rounded-lg text-emerald-500">
                                         <Wallet className="w-5 h-5" />
                                     </div>
-                                    <h3 className="text-zinc-400 font-medium">Bank Deposits</h3>
+                                    <h3 className="text-muted-foreground font-medium">Bank Deposits</h3>
                                 </div>
-                                <div className="text-3xl font-bold text-white tracking-tight">
+                                <div className="text-3xl font-bold text-foreground tracking-tight">
                                     {formatCurrency(totalDepositsValue)}
                                 </div>
                                 <div className="text-sm mt-1 font-medium text-emerald-500">
@@ -193,7 +193,7 @@ export default async function Home({ searchParams }: { searchParams: { currency?
 
                     {/* Pensions */}
                     <Link href="/pension" className="block">
-                        <div className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-6 relative overflow-hidden group hover:border-zinc-700 transition-colors cursor-pointer">
+                        <div className="bg-card/50 border border-border rounded-xl p-6 relative overflow-hidden group hover:border-border/80 transition-colors cursor-pointer">
                             <div className="absolute top-0 right-0 p-6 opacity-10 group-hover:opacity-20 transition-opacity">
                                 <PiggyBank className="w-16 h-16 text-amber-500" />
                             </div>
@@ -202,9 +202,9 @@ export default async function Home({ searchParams }: { searchParams: { currency?
                                     <div className="p-2 bg-amber-500/10 rounded-lg text-amber-500">
                                         <PiggyBank className="w-5 h-5" />
                                     </div>
-                                    <h3 className="text-zinc-400 font-medium">Retirement</h3>
+                                    <h3 className="text-muted-foreground font-medium">Retirement</h3>
                                 </div>
-                                <div className="text-3xl font-bold text-white tracking-tight">
+                                <div className="text-3xl font-bold text-foreground tracking-tight">
                                     {formatCurrency(totalPensionsValue)}
                                 </div>
                                 <div className={`text-sm mt-1 font-medium ${totalPensionsGain >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
@@ -217,32 +217,32 @@ export default async function Home({ searchParams }: { searchParams: { currency?
 
                 {/* Global Chart */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                    <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6 h-[400px]">
-                        <h3 className="text-xl font-bold text-white mb-6">Global Asset Allocation</h3>
+                    <div className="bg-card border border-border rounded-xl p-6 h-[400px]">
+                        <h3 className="text-xl font-bold text-foreground mb-6">Global Asset Allocation</h3>
                         {totalNetWorth > 0 ? (
                             <PortfolioCharts holdings={globalAllocation} currency={targetCurrency} />
                         ) : (
-                            <div className="flex flex-col items-center justify-center h-full text-zinc-500 text-sm">
+                            <div className="flex flex-col items-center justify-center h-full text-muted-foreground text-sm">
                                 No assets found.
                             </div>
                         )}
                     </div>
 
-                    <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6 flex flex-col justify-center">
+                    <div className="bg-card border border-border rounded-xl p-6 flex flex-col justify-center">
                         <div className="space-y-6">
-                            <h3 className="text-xl font-bold text-white">Quick Actions</h3>
+                            <h3 className="text-xl font-bold text-foreground">Quick Actions</h3>
                             <div className="grid grid-cols-1 gap-4">
-                                <Link href={`/investments?currency=${targetCurrency}`} className="p-4 bg-zinc-950/50 border border-zinc-800 rounded-lg flex items-center justify-between hover:bg-zinc-900 transition-colors">
-                                    <span className="font-medium text-zinc-300">Manage Stocks & ETFs</span>
-                                    <span className="text-indigo-500">Go to Portfolio &rarr;</span>
+                                <Link href={`/investments?currency=${targetCurrency}`} className="p-4 bg-background border border-border rounded-lg flex items-center justify-between hover:bg-muted transition-colors">
+                                    <span className="font-medium text-foreground">Manage Stocks & ETFs</span>
+                                    <span className="text-indigo-500 text-sm">Go to Portfolio &rarr;</span>
                                 </Link>
-                                <Link href={`/deposits?currency=${targetCurrency}`} className="p-4 bg-zinc-950/50 border border-zinc-800 rounded-lg flex items-center justify-between hover:bg-zinc-900 transition-colors">
-                                    <span className="font-medium text-zinc-300">Update Bank Deposits</span>
-                                    <span className="text-emerald-500">Go to Deposits &rarr;</span>
+                                <Link href={`/deposits?currency=${targetCurrency}`} className="p-4 bg-background border border-border rounded-lg flex items-center justify-between hover:bg-muted transition-colors">
+                                    <span className="font-medium text-foreground">Update Bank Deposits</span>
+                                    <span className="text-emerald-500 text-sm">Go to Deposits &rarr;</span>
                                 </Link>
-                                <Link href={`/pension?currency=${targetCurrency}`} className="p-4 bg-zinc-950/50 border border-zinc-800 rounded-lg flex items-center justify-between hover:bg-zinc-900 transition-colors">
-                                    <span className="font-medium text-zinc-300">Track Pension Funds</span>
-                                    <span className="text-amber-500">Go to Retirement &rarr;</span>
+                                <Link href={`/pension?currency=${targetCurrency}`} className="p-4 bg-background border border-border rounded-lg flex items-center justify-between hover:bg-muted transition-colors">
+                                    <span className="font-medium text-foreground">Track Pension Funds</span>
+                                    <span className="text-amber-500 text-sm">Go to Retirement &rarr;</span>
                                 </Link>
                             </div>
                         </div>

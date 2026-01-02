@@ -87,40 +87,40 @@ export function HoldingsTable({ holdings, currency }: { holdings: Holding[], cur
         <div className="space-y-4">
             <div className="flex items-center justify-end">
                 <div className="relative">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                     <input
                         type="text"
                         placeholder="Filter assets..."
                         value={filterQuery}
                         onChange={(e) => setFilterQuery(e.target.value)}
-                        className="bg-zinc-900 border border-zinc-800 rounded-lg pl-9 pr-4 py-1.5 text-sm text-white placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 w-full max-w-xs"
+                        className="bg-card border border-border rounded-lg pl-9 pr-4 py-1.5 text-sm text-foreground placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-indigo-500/50 w-full max-w-xs"
                     />
                 </div>
             </div>
 
-            <div className="rounded-xl border border-zinc-800/50 overflow-hidden bg-zinc-900/30">
+            <div className="rounded-xl border border-border/50 overflow-hidden bg-muted/30">
                 <table className="w-full text-left text-sm">
-                    <thead className="bg-zinc-900/50 text-zinc-400">
+                    <thead className="bg-muted text-muted-foreground">
                         <tr>
-                            <th className="px-6 py-4 font-medium cursor-pointer hover:text-white transition-colors select-none" onClick={() => handleSort('asset')}>
+                            <th className="px-6 py-4 font-medium cursor-pointer hover:text-foreground transition-colors select-none" onClick={() => handleSort('asset')}>
                                 <div className="flex items-center gap-2">
                                     Asset
                                     <ArrowUpDown className="w-3 h-3" />
                                 </div>
                             </th>
-                            <th className="px-6 py-4 font-medium text-right cursor-pointer hover:text-white transition-colors select-none" onClick={() => handleSort('price')}>
+                            <th className="px-6 py-4 font-medium text-right cursor-pointer hover:text-foreground transition-colors select-none" onClick={() => handleSort('price')}>
                                 <div className="flex items-center justify-end gap-2">
                                     Price
                                     <ArrowUpDown className="w-3 h-3" />
                                 </div>
                             </th>
-                            <th className="px-6 py-4 font-medium text-right cursor-pointer hover:text-white transition-colors select-none" onClick={() => handleSort('balance')}>
+                            <th className="px-6 py-4 font-medium text-right cursor-pointer hover:text-foreground transition-colors select-none" onClick={() => handleSort('balance')}>
                                 <div className="flex items-center justify-end gap-2">
                                     Balance
                                     <ArrowUpDown className="w-3 h-3" />
                                 </div>
                             </th>
-                            <th className="px-6 py-4 font-medium text-right cursor-pointer hover:text-white transition-colors select-none" onClick={() => handleSort('value')}>
+                            <th className="px-6 py-4 font-medium text-right cursor-pointer hover:text-foreground transition-colors select-none" onClick={() => handleSort('value')}>
                                 <div className="flex items-center justify-end gap-2">
                                     Value
                                     <ArrowUpDown className="w-3 h-3" />
@@ -129,7 +129,7 @@ export function HoldingsTable({ holdings, currency }: { holdings: Holding[], cur
                             <th className="px-6 py-4 font-medium text-right">Action</th>
                         </tr>
                     </thead>
-                    <tbody className="divide-y divide-zinc-800/50">
+                    <tbody className="divide-y divide-border/50">
                         {sortedHoldings.length === 0 ? (
                             <tr className="bg-zinc-900/20">
                                 <td className="px-6 py-8 text-zinc-500 text-center" colSpan={5}>
@@ -140,19 +140,19 @@ export function HoldingsTable({ holdings, currency }: { holdings: Holding[], cur
                             sortedHoldings.map((asset) => (
                                 <tr key={asset.symbol} className="hover:bg-zinc-800/30 transition-colors">
                                     <td className="px-6 py-4">
-                                        <div className="font-medium text-white">{asset.name || asset.symbol} <span className="text-zinc-500 font-normal">({asset.symbol})</span></div>
+                                        <div className="font-medium text-foreground">{asset.name || asset.symbol} <span className="text-muted-foreground font-normal">({asset.symbol})</span></div>
                                         <div className={cn("text-xs mt-1", (asset.gain || 0) >= 0 ? "text-emerald-500" : "text-rose-500")}>
                                             {(asset.gain || 0) >= 0 ? '+' : ''}{formatCurrency(asset.gain || 0)} ({formatPct(asset.gainPercent || 0)})
                                         </div>
                                     </td>
-                                    <td className="px-6 py-4 text-right text-zinc-300">
+                                    <td className="px-6 py-4 text-right text-foreground/80">
                                         {formatCurrency(asset.currentPrice || 0)}
                                     </td>
                                     <td className="px-6 py-4 text-right">
-                                        <div className="text-white">{asset.quantity}</div>
-                                        <div className="text-xs text-zinc-500">Avg {formatCurrency(asset.avgCost)}</div>
+                                        <div className="text-foreground">{asset.quantity}</div>
+                                        <div className="text-xs text-muted-foreground">Avg {formatCurrency(asset.avgCost)}</div>
                                     </td>
-                                    <td className="px-6 py-4 text-right font-medium text-white">
+                                    <td className="px-6 py-4 text-right font-medium text-foreground">
                                         {formatCurrency(asset.marketValue || 0)}
                                     </td>
                                     <td className="px-6 py-4 text-right">

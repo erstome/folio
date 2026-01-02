@@ -56,10 +56,10 @@ export function AddPensionDialog({ isOpen, onClose }: AddPensionDialogProps) {
 
     return createPortal(
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-            <div className="bg-zinc-900 border border-zinc-800 rounded-xl w-full max-w-md shadow-2xl p-6 space-y-6">
+            <div className="bg-card border border-border rounded-xl w-full max-w-md shadow-2xl p-6 space-y-6">
                 <div className="flex justify-between items-center">
-                    <h2 className="text-xl font-bold text-white">Add Pension Fund</h2>
-                    <button onClick={onClose} className="text-zinc-500 hover:text-white transition-colors">
+                    <h2 className="text-xl font-bold text-foreground">Add Pension Fund</h2>
+                    <button onClick={onClose} className="text-muted-foreground hover:text-foreground transition-colors">
                         <X className="w-5 h-5" />
                     </button>
                 </div>
@@ -72,11 +72,11 @@ export function AddPensionDialog({ isOpen, onClose }: AddPensionDialogProps) {
 
                 <form onSubmit={handleSubmit} className="space-y-4">
                     <div className="space-y-2">
-                        <label className="text-xs font-medium text-zinc-400">Fund Name</label>
+                        <label className="text-xs font-medium text-muted-foreground">Fund Name</label>
                         <input
                             type="text"
                             name="name"
-                            className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-indigo-500/50 placeholder-zinc-600"
+                            className="w-full bg-background border border-border rounded-lg px-3 py-2 text-foreground focus:outline-none focus:ring-2 focus:ring-indigo-500/50 placeholder-muted-foreground"
                             placeholder="e.g. PPR Alves Ribeiro"
                             required
                         />
@@ -84,23 +84,23 @@ export function AddPensionDialog({ isOpen, onClose }: AddPensionDialogProps) {
 
                     <div className="grid grid-cols-2 gap-4">
                         <div className="space-y-2">
-                            <label className="text-xs font-medium text-zinc-400">Total Invested (€)</label>
+                            <label className="text-xs font-medium text-muted-foreground">Total Invested (€)</label>
                             <input
                                 type="number"
                                 name="investedAmount"
                                 step="0.01"
-                                className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
+                                className="w-full bg-background border border-border rounded-lg px-3 py-2 text-foreground focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
                                 placeholder="Total cash put in"
                                 required
                             />
                         </div>
                         <div className="space-y-2">
-                            <label className="text-xs font-medium text-zinc-400">Current Value (€)</label>
+                            <label className="text-xs font-medium text-muted-foreground">Current Value (€)</label>
                             <input
                                 type="number"
                                 name="currentValue"
                                 step="0.01"
-                                className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
+                                className="w-full bg-background border border-border rounded-lg px-3 py-2 text-foreground focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
                                 placeholder="Current balance"
                                 required
                             />
@@ -109,21 +109,21 @@ export function AddPensionDialog({ isOpen, onClose }: AddPensionDialogProps) {
 
                     <div className="grid grid-cols-2 gap-4">
                         <div className="space-y-2">
-                            <label className="text-xs font-medium text-zinc-400">Quantity (Units)</label>
+                            <label className="text-xs font-medium text-muted-foreground">Quantity (Units)</label>
                             <input
                                 type="number"
                                 name="quantity"
                                 step="0.0001"
-                                className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
+                                className="w-full bg-background border border-border rounded-lg px-3 py-2 text-foreground focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
                                 placeholder="e.g. 154.32"
                                 required
                             />
                         </div>
                         <div className="space-y-2">
-                            <label className="text-xs font-medium text-zinc-400">Currency</label>
+                            <label className="text-xs font-medium text-muted-foreground">Currency</label>
                             <select
                                 name="currency"
-                                className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
+                                className="w-full bg-background border border-border rounded-lg px-3 py-2 text-foreground focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
                             >
                                 <option value="EUR">EUR</option>
                                 <option value="USD">USD</option>
@@ -137,10 +137,10 @@ export function AddPensionDialog({ isOpen, onClose }: AddPensionDialogProps) {
                                 id="tax-advantaged"
                                 name="isTaxAdvantaged"
                                 type="checkbox"
-                                className="w-4 h-4 rounded border-zinc-700 bg-zinc-900 text-indigo-600 focus:ring-indigo-500/50 focus:ring-offset-0"
+                                className="w-4 h-4 rounded border-border bg-background text-indigo-600 focus:ring-indigo-500/50 focus:ring-offset-0"
                             />
                         </div>
-                        <label htmlFor="tax-advantaged" className="text-sm text-zinc-400">
+                        <label htmlFor="tax-advantaged" className="text-sm text-muted-foreground">
                             Is Tax Advantaged? (PPR benefits)
                         </label>
                     </div>
