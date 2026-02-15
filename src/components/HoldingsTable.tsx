@@ -140,7 +140,12 @@ export function HoldingsTable({ holdings, currency }: { holdings: Holding[], cur
                             sortedHoldings.map((asset) => (
                                 <tr key={asset.symbol} className="hover:bg-zinc-800/30 transition-colors">
                                     <td className="px-6 py-4">
-                                        <div className="font-medium text-foreground">{asset.name || asset.symbol} <span className="text-muted-foreground font-normal">({asset.symbol})</span></div>
+                                        <div className="font-medium text-foreground">
+                                            <a href={`/investments/${encodeURIComponent(asset.symbol)}?currency=${currency}`} className="hover:text-indigo-400 transition-colors hover:underline">
+                                                {asset.name || asset.symbol}
+                                            </a>
+                                            <span className="text-muted-foreground font-normal ml-1">({asset.symbol})</span>
+                                        </div>
                                         <div className={cn("text-xs mt-1", (asset.gain || 0) >= 0 ? "text-emerald-500" : "text-rose-500")}>
                                             {(asset.gain || 0) >= 0 ? '+' : ''}{formatCurrency(asset.gain || 0)} ({formatPct(asset.gainPercent || 0)})
                                         </div>

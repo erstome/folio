@@ -2,19 +2,22 @@ import { Navbar } from "@/components/Navbar";
 import { PortfolioCharts } from "@/components/PortfolioCharts";
 import { HoldingsTable } from "@/components/HoldingsTable";
 import { RecentTransactions } from "@/components/RecentTransactions";
-import { getPortfolio, getQuotes, getTransactions, updateAssetName, syncHistoricalPrices } from "../actions";
+import { ImportButton } from "@/components/ImportButton";
+import { getPortfolio, getQuotes, getTransactions, updateAssetName, syncHistoricalPrices, getPortfolioPerformance } from "../actions";
 import { cn } from "@/lib/utils";
-import { LineChart } from 'lucide-react';
+import { LineChart, Calendar } from 'lucide-react';
 import { Holding } from "@/app/types";
+import { MonthlyPerformanceTable } from "@/components/MonthlyPerformanceTable";
 
 export default async function InvestmentsPage({ searchParams }: { searchParams: { currency?: string } }) {
     const targetCurrency = searchParams?.currency || 'EUR';
     const isEur = targetCurrency === 'EUR';
 
     // 1. Fetch Data
-    const [rawPortfolio, transactions] = await Promise.all([
+    const [rawPortfolio, transactions, globalPerformance] = await Promise.all([
         getPortfolio(),
-        getTransactions()
+        getTransactions(),
+        getPortfolioPerformance(targetCurrency)
     ]);
 
     const syncSymbols = Array.from(new Set(rawPortfolio.map(p => p.symbol)));
@@ -22,7 +25,7 @@ export default async function InvestmentsPage({ searchParams }: { searchParams: 
     // 2. Trigger Background Syncs (Historical)
     // We don't await this to keep the page load fast.
     // Given the 429 risk, running it here is a good compromise.
-    syncHistoricalPrices(syncSymbols).catch(err => console.error("Background sync failed:", err));
+    syncHistoricalPrices([...syncSymbols, 'EURUSD=X']).catch(err => console.error("Background sync failed:", err));
 
     // 2. Fetch Quotes & Rates
     const [quotes, rateResult] = await Promise.all([
@@ -98,6 +101,7 @@ export default async function InvestmentsPage({ searchParams }: { searchParams: 
                         </h2>
                         <p className="text-zinc-400 mt-1">Manage your stocks, ETFs and crypto assets.</p>
                     </div>
+                    <ImportButton />
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
@@ -127,6 +131,15 @@ export default async function InvestmentsPage({ searchParams }: { searchParams: 
                             <RecentTransactions
                                 transactions={transactions}
                             />
+                        </div>
+
+                        {/* Global Monthly Performance */}
+                        <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6">
+                            <h2 className="text-xl font-bold text-white mb-6 flex items-center gap-2">
+                                <Calendar className="w-5 h-5 text-indigo-500" />
+                                Global Monthly Performance
+                            </h2>
+                            <MonthlyPerformanceTable data={globalPerformance.performance} currency={targetCurrency} />
                         </div>
                     </div>
 
