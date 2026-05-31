@@ -199,9 +199,88 @@ export async function getPortfolio() {
             avgCost: quantity > 0 ? totalCost / quantity : 0, // In USD
             totalCost, // In USD
         }
-    }).filter((h: any) => h.quantity > 0) // Filter out fully sold assets for now
+    }).filter((h: any) => h.quantity > 0.0001) // Filter out fully sold / floating-point-zero assets
 
     return holdings
+}
+
+export async function getSoldPortfolio() {
+    // Fetch all STOCK/ETF/CRYPTO assets including their transactions
+    const assets = await prisma.asset.findMany({
+        where: {
+            type: { in: ['STOCK', 'ETF', 'CRYPTO'] }
+        },
+        include: {
+            transactions: { orderBy: { date: 'asc' } },
+        },
+    })
+
+    let eurUsdRate = 1.1;
+    try {
+        const rateResult = await getQuotes(['EURUSD=X']);
+        const rateQuote = rateResult['EURUSD=X'];
+        if (rateQuote && rateQuote.price) eurUsdRate = rateQuote.price;
+    } catch (e) { /* use default */ }
+
+    const closed = assets.map((asset) => {
+        let quantity = 0
+        let totalCost = 0   // USD
+        let proceeds = 0    // USD (total sell revenue)
+        let lastDate: Date | null = null as Date | null
+
+        asset.transactions.forEach((t) => {
+            const txCurrency = (t.currency as string) || 'USD';
+            const txPriceInUsd = txCurrency === 'EUR' ? t.price * eurUsdRate : t.price;
+
+            if (t.type === 'BUY') {
+                quantity += t.quantity
+                totalCost += t.quantity * txPriceInUsd
+            } else {
+                if (quantity > 0) {
+                    const avgCost = totalCost / quantity
+                    proceeds += t.quantity * txPriceInUsd
+                    quantity -= t.quantity
+                    totalCost -= t.quantity * avgCost
+                } else {
+                    quantity -= t.quantity
+                }
+                lastDate = t.date
+            }
+        })
+
+        // Total invested = sum of all BUY cost (minus cost basis for shares never sold)
+        const totalInvested = asset.transactions
+            .filter(t => t.type === 'BUY')
+            .reduce((sum, t) => {
+                const txCurrency = (t.currency as string) || 'USD';
+                const txPriceInUsd = txCurrency === 'EUR' ? t.price * eurUsdRate : t.price;
+                return sum + t.quantity * txPriceInUsd
+            }, 0)
+
+        const realizedGain = proceeds - totalInvested
+        const realizedGainPercent = totalInvested > 0 ? (realizedGain / totalInvested) * 100 : 0
+
+        return {
+            symbol: asset.symbol,
+            name: asset.name || asset.symbol,
+            quantity,
+            totalInvested, // USD
+            proceeds,      // USD
+            realizedGain,  // USD
+            realizedGainPercent,
+            lastDate,
+        }
+    }).filter((h) => {
+        // Must have at least one SELL transaction (not just an empty / data-import artefact)
+        const hasSell = assets
+            .find(a => a.symbol === h.symbol)
+            ?.transactions.some(t => t.type === 'SELL')
+        // Quantity must be effectively zero (fully sold, accounting for float rounding)
+        return hasSell && Math.abs(h.quantity) < 0.0001
+    })
+        .sort((a, b) => (b.lastDate?.getTime() ?? 0) - (a.lastDate?.getTime() ?? 0))
+
+    return closed
 }
 
 // Helper for FMP

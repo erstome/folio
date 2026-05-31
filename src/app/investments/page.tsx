@@ -3,21 +3,23 @@ import { PortfolioCharts } from "@/components/PortfolioCharts";
 import { HoldingsTable } from "@/components/HoldingsTable";
 import { RecentTransactions } from "@/components/RecentTransactions";
 import { ImportButton } from "@/components/ImportButton";
-import { getPortfolio, getQuotes, getTransactions, updateAssetName, syncHistoricalPrices, getPortfolioPerformance } from "../actions";
+import { getPortfolio, getQuotes, getTransactions, updateAssetName, syncHistoricalPrices, getPortfolioPerformance, getSoldPortfolio } from "../actions";
 import { cn } from "@/lib/utils";
 import { LineChart, Calendar } from 'lucide-react';
 import { Holding } from "@/app/types";
 import { MonthlyPerformanceTable } from "@/components/MonthlyPerformanceTable";
+import { ClosedPositionsTable } from "@/components/ClosedPositionsTable";
 
 export default async function InvestmentsPage({ searchParams }: { searchParams: { currency?: string } }) {
     const targetCurrency = searchParams?.currency || 'EUR';
     const isEur = targetCurrency === 'EUR';
 
     // 1. Fetch Data
-    const [rawPortfolio, transactions, globalPerformance] = await Promise.all([
+    const [rawPortfolio, transactions, globalPerformance, soldPortfolio] = await Promise.all([
         getPortfolio(),
         getTransactions(),
-        getPortfolioPerformance(targetCurrency)
+        getPortfolioPerformance(targetCurrency),
+        getSoldPortfolio(),
     ]);
 
     const syncSymbols = Array.from(new Set(rawPortfolio.map(p => p.symbol)));
@@ -124,6 +126,15 @@ export default async function InvestmentsPage({ searchParams }: { searchParams: 
                                 currency={targetCurrency}
                             />
                         </div>
+
+                        {/* Closed Positions */}
+                        {soldPortfolio.length > 0 && (
+                            <ClosedPositionsTable
+                                positions={soldPortfolio}
+                                currency={targetCurrency}
+                                usdPerEur={usdPerEur}
+                            />
+                        )}
 
                         {/* Recent Activity */}
                         <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6">
