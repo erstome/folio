@@ -1,11 +1,21 @@
 'use client'
 
 import { useState } from 'react'
-import { TradeRepublicTransaction } from '@/lib/trade-republic-parser'
 import { CheckCircle, XCircle } from 'lucide-react'
 
+export interface ParsedTransaction {
+  date: Date
+  type: string
+  description: string
+  symbol?: string
+  quantity?: number
+  amount: number
+  currency: string
+  assetName?: string
+}
+
 interface TransactionValidationTableProps {
-  transactions: TradeRepublicTransaction[]
+  transactions: ParsedTransaction[]
   selectedIndices: Set<number>
   onSelectionChange: (indices: Set<number>) => void
 }
@@ -41,7 +51,7 @@ export function TransactionValidationTable({
     return new Intl.DateTimeFormat('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }).format(date)
   }
 
-  const calculatePrice = (tx: TradeRepublicTransaction) => {
+  const calculatePrice = (tx: ParsedTransaction) => {
     if (tx.quantity && tx.quantity > 0) {
       return tx.amount / tx.quantity
     }

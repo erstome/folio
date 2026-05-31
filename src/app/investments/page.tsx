@@ -3,6 +3,7 @@ import { PortfolioCharts } from "@/components/PortfolioCharts";
 import { HoldingsTable } from "@/components/HoldingsTable";
 import { RecentTransactions } from "@/components/RecentTransactions";
 import { ImportButton } from "@/components/ImportButton";
+import { ImportXTBButton } from "@/components/ImportXTBButton";
 import { getPortfolio, getQuotes, getTransactions, updateAssetName, syncHistoricalPrices, getPortfolioPerformance, getSoldPortfolio } from "../actions";
 import { cn } from "@/lib/utils";
 import { LineChart, Calendar } from 'lucide-react';
@@ -103,7 +104,10 @@ export default async function InvestmentsPage({ searchParams }: { searchParams: 
                         </h2>
                         <p className="text-zinc-400 mt-1">Manage your stocks, ETFs and crypto assets.</p>
                     </div>
-                    <ImportButton />
+                    <div className="flex gap-2">
+                        <ImportButton />
+                        <ImportXTBButton />
+                    </div>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-8">

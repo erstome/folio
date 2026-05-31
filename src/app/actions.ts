@@ -35,18 +35,27 @@ async function getCloudCredentials() {
 }
 
 export async function addTransaction(data: TransactionData) {
-    const { symbol, type, quantity, price, date, currency = 'USD' } = data
+    const { symbol, type, quantity, price, date, currency = 'USD', assetName: providedName } = data
     const upperSymbol = symbol.toUpperCase()
 
-    // 0. Try to fetch real name if new asset
-    let assetName = upperSymbol
-    try {
-        const quote = await yahooFinance.quote(upperSymbol)
-        if (quote && (quote.longName || quote.shortName)) {
-            assetName = quote.longName || quote.shortName || upperSymbol
+    // 0. Resolve asset name: use provided name (e.g. from XTB import), else fetch from Yahoo
+    let assetName = providedName || upperSymbol
+    if (!providedName) {
+        try {
+            // Resolve XTB-style or ISIN symbols to the canonical ticker before fetching
+            let tickerToQuery = upperSymbol
+            if (ISIN_REGEX.test(upperSymbol)) {
+                tickerToQuery = (await resolveISIN(upperSymbol)) ?? upperSymbol
+            } else if (XTB_TICKER_REGEX.test(upperSymbol)) {
+                tickerToQuery = resolveXTBTicker(upperSymbol) ?? upperSymbol
+            }
+            const quote = await yahooFinance.quote(tickerToQuery)
+            if (quote && (quote.longName || quote.shortName)) {
+                assetName = quote.longName || quote.shortName || upperSymbol
+            }
+        } catch (e) {
+            console.warn("Failed to fetch name for new asset", e)
         }
-    } catch (e) {
-        console.warn("Failed to fetch name for new asset", e)
     }
 
     // 1. Upsert Asset
@@ -332,8 +341,36 @@ const ISIN_TTL = 24 * 60 * 60 * 1000;
 
 // Manual Overrides for specific ISINs (Key: ISIN, Value: Ticker)
 const ISIN_OVERRIDES: Record<string, string> = {
-    "KYG9830T1067": "3CP.F" // Xiaomi Corporation (Frankfurt - EUR)
+    "KYG9830T1067": "3CP.F",    // Xiaomi Corporation (Frankfurt - EUR)
+    "US02079K3059": "GOOGL",    // Alphabet Inc (Google) Class A
+    "XF000BTC0017": "BTC-EUR",  // Bitcoin ETP (non-standard ISIN, tracks BTC price in EUR)
 };
+
+// XTB uses its own exchange suffix convention that differs from Yahoo Finance.
+// Maps XTB suffix → Yahoo Finance suffix (empty string = strip suffix for US stocks).
+const XTB_EXCHANGE_SUFFIX_MAP: Record<string, string> = {
+    ".US": "",    // US stocks — strip suffix (e.g. BYRN.US → BYRN)
+    ".PT": ".LS", // Portugal → Euronext Lisbon
+    ".ES": ".MC", // Spain → Madrid Stock Exchange
+    ".IT": ".MI", // Italy → Borsa Italiana
+    ".FR": ".PA", // France → Euronext Paris
+    ".BE": ".BR", // Belgium → Euronext Brussels
+};
+// Full-ticker overrides for XTB symbols where the base ticker itself differs from Yahoo Finance.
+const XTB_TICKER_OVERRIDES: Record<string, string> = {
+    "REP1.ES": "REP.MC", // Repsol — XTB uses REP1, Yahoo Finance uses REP
+};
+const XTB_TICKER_REGEX = /^[A-Z0-9]+\.(US|PT|ES|IT|FR|BE)$/;
+
+function resolveXTBTicker(symbol: string): string | null {
+    if (XTB_TICKER_OVERRIDES[symbol]) return XTB_TICKER_OVERRIDES[symbol];
+    for (const [xtbSuffix, yahooSuffix] of Object.entries(XTB_EXCHANGE_SUFFIX_MAP)) {
+        if (symbol.endsWith(xtbSuffix)) {
+            return symbol.slice(0, -xtbSuffix.length) + yahooSuffix;
+        }
+    }
+    return null;
+}
 
 async function resolveISIN(isin: string): Promise<string | null> {
     // 0. Check Overrides
@@ -374,7 +411,7 @@ export async function getQuotes(symbols: string[]) {
     const symbolsToResolve: string[] = [];  // ISINs needing resolution
     const directSymbols: string[] = [];     // Regular Tickers + Resolved Tickers
 
-    // Reverse Map: Ticker -> List of original ISINs (to map result back)
+    // Reverse Map: Ticker -> List of original symbols (ISINs / XTB tickers) that map to it
     const tickerToISINs: Record<string, string[]> = {};
 
     // 1. Check Cache First & Classify Symbols
@@ -383,7 +420,7 @@ export async function getQuotes(symbols: string[]) {
         if (cached && (now - cached.timestamp < CACHE_TTL)) {
             results[sym] = cached.data;
         } else {
-            if (ISIN_REGEX.test(sym)) {
+            if (ISIN_REGEX.test(sym) || XTB_TICKER_REGEX.test(sym)) {
                 symbolsToResolve.push(sym);
             } else {
                 directSymbols.push(sym);
@@ -391,19 +428,22 @@ export async function getQuotes(symbols: string[]) {
         }
     }
 
-    // 2. Resolve ISINs
-    for (const isin of symbolsToResolve) {
-        const ticker = await resolveISIN(isin);
-        if (ticker) {
+    // 2. Resolve ISINs and XTB-style tickers to canonical Yahoo Finance tickers
+    for (const sym of symbolsToResolve) {
+        let ticker: string | null = null;
+        if (ISIN_REGEX.test(sym)) {
+            ticker = await resolveISIN(sym);
+        } else {
+            ticker = resolveXTBTicker(sym);
+            if (ticker !== null) console.log(`[getQuotes] XTB ${sym} -> ${ticker || '(base ticker)'}`);
+        }
+        if (ticker !== null) {
             directSymbols.push(ticker);
             if (!tickerToISINs[ticker]) tickerToISINs[ticker] = [];
-            tickerToISINs[ticker].push(isin);
+            tickerToISINs[ticker].push(sym);
         } else {
-            // Failed to resolve, might try as direct symbol or fail
-            console.warn(`[getQuotes] Could not resolve ISIN: ${isin}`);
-            // Add to direct symbols just in case it works directly on some API?
-            // Unlikely, but fallback.
-            directSymbols.push(isin);
+            console.warn(`[getQuotes] Could not resolve symbol: ${sym}`);
+            directSymbols.push(sym);
         }
     }
 
@@ -1045,6 +1085,96 @@ export async function importTradeRepublicStatement(fileData: string, fileName: s
     }
 }
 
+// --- XTB Import Actions ---
+
+export async function parseXTBStatementAction(fileData: string) {
+    try {
+        const { parseXTBStatement } = await import('@/lib/xtb-parser')
+        const base64Data = fileData.includes(',') ? fileData.split(',')[1] : fileData
+        const buffer = Buffer.from(base64Data, 'base64')
+        const transactions = parseXTBStatement(buffer)
+        return { success: true, transactions }
+    } catch (e) {
+        console.error('Failed to parse XTB statement', e)
+        return {
+            success: false,
+            error: e instanceof Error ? e.message : 'Unknown error',
+            transactions: []
+        }
+    }
+}
+
+export async function importXTBStatementAction(fileData: string, fileName: string, selectedTransactions?: number[]) {
+    try {
+        const parseResult = await parseXTBStatementAction(fileData)
+        if (!parseResult.success) {
+            return { success: false, error: parseResult.error, imported: 0, skipped: 0, errors: [] }
+        }
+
+        const transactionsToImport = selectedTransactions
+            ? selectedTransactions.map(i => parseResult.transactions[i]).filter(Boolean)
+            : parseResult.transactions
+
+        let imported = 0
+        let skipped = 0
+        const errors: string[] = []
+
+        for (const tx of transactionsToImport) {
+            if (!tx.symbol || !tx.quantity || tx.amount === 0) { skipped++; continue }
+
+            try {
+                const price = tx.amount / tx.quantity
+
+                // Skip if this exact transaction was already imported.
+                // Use ±30 min (not ±1 day) so two purchases of the same quantity
+                // at different prices or times on the same day are not falsely merged.
+                // Price is also included so identical-quantity trades at different prices
+                // on adjacent days are not treated as duplicates.
+                const existing = await prisma.transaction.findFirst({
+                    where: {
+                        assetId: tx.symbol.toUpperCase(),
+                        type: tx.type,
+                        quantity: tx.quantity,
+                        price: { gte: price - 0.001, lte: price + 0.001 },
+                        date: {
+                            gte: new Date(tx.date.getTime() - 1800000),
+                            lte: new Date(tx.date.getTime() + 1800000),
+                        }
+                    }
+                })
+                if (existing) { skipped++; continue }
+                await addTransaction({
+                    symbol: tx.symbol,
+                    type: tx.type,
+                    quantity: tx.quantity,
+                    price,
+                    date: tx.date,
+                    currency: tx.currency || 'EUR',
+                    assetName: tx.assetName || undefined,
+                })
+                imported++
+            } catch (error) {
+                errors.push(`Failed to import ${tx.description}: ${error instanceof Error ? error.message : 'Unknown error'}`)
+                skipped++
+            }
+        }
+
+        revalidatePath('/')
+        revalidatePath('/investments')
+
+        return { success: true, imported, skipped, errors: errors.slice(0, 10) }
+    } catch (e) {
+        console.error('Failed to import XTB statement', e)
+        return {
+            success: false,
+            error: e instanceof Error ? e.message : 'Unknown error',
+            imported: 0,
+            skipped: 0,
+            errors: []
+        }
+    }
+}
+
 // --- Cloud Backup Actions ---
 
 export async function getGoogleAuthUrl() {
@@ -1344,8 +1474,14 @@ export async function getAssetDetails(symbol: string) {
     // Iterate Monthly from Start Date to Now
     let cursorDate = new Date(startDate.getFullYear(), startDate.getMonth(), 1);
 
-    // Pre-calculate last price if missing from history (for current partial month)
-    let currentMarketPrice = asset.lastPrice || 0;
+    // Fetch live price before the loop — used both for the current month's endPrice
+    // and for the lifetime gain calculation below.
+    let currentMarketPrice = asset.lastPrice ?? 0;
+    try {
+        const freshQuotes = await getQuotes([symbol]);
+        const fresh = freshQuotes[symbol];
+        if (fresh && fresh.price > 0) currentMarketPrice = fresh.price;
+    } catch (_) { /* keep DB value */ }
     if (currentMarketPrice === 0 && asset.transactions.length > 0) {
         currentMarketPrice = asset.transactions[asset.transactions.length - 1].price;
     }
@@ -1502,8 +1638,7 @@ export async function getAssetDetails(symbol: string) {
         else if (t.type === 'SELL') lifetimeSales += amt;
     });
 
-    const currentValuation = (asset.lastPrice || 0) * (monthlyPerformance.length > 0 ? currentHoldings : 0); // Approx
-    // Actually, currentHoldings is the running total from the loop, which is correct at end of 'now'.
+    const currentValuation = currentMarketPrice * currentHoldings;
 
     const totalLifetimeGain = (currentValuation + lifetimeSales) - lifetimeInvested;
 
