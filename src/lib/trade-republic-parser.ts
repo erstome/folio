@@ -16,102 +16,100 @@ export async function parseTradeRepublicStatement(pdfBuffer: Buffer): Promise<Tr
   // pdf-parse v2 uses a class-based API
   const pdfParseModule = eval('require')('pdf-parse')
   const PDFParse = pdfParseModule.PDFParse || pdfParseModule
-  
+
   // Create parser instance with buffer
   const parser = new PDFParse({ data: pdfBuffer })
-  
+
   // Get text content
   const result = await parser.getText()
   const text = result.text
-  
+
   const transactions: TradeRepublicTransaction[] = []
-  
+
   // Split by lines
   const lines = text.split('\n').map((l: string) => l.trim()).filter((l: string) => l.length > 0)
-  
-  // Find the transaction table section
-  let headerLineIndex = -1
+
+  // Account statement format: dates are split across THREE separate lines:
+  //   line i:   "DD"       (day alone)
+  //   line i+1: "MMM"      (month alone, 3-9 chars)
+  //   line i+2: "YYYY"     (year alone)
+  //   line i+3+: transaction content (may span multiple lines until the € amounts)
+  const isDateLine = (idx: number): boolean =>
+    idx + 2 < lines.length &&
+    /^\d{1,2}$/.test(lines[idx]) &&
+    /^[A-Za-z]{3,9}$/.test(lines[idx + 1]) &&
+    /^\d{4}$/.test(lines[idx + 2])
+
+  // Page header/footer lines that can appear mid-content and should be skipped
+  const isPageJunk = (l: string): boolean =>
+    l.includes('DATE TYPE DESCRIPTION') ||
+    l.startsWith('OUT BALANCE') ||
+    l.startsWith('TRADE REPUBLIC BANK GMBH') ||
+    l.startsWith('Trade Republic Bank GmbH') ||
+    l.startsWith('Generated on') ||
+    /^-- \d+ of \d+ --$/.test(l) ||
+    l.startsWith('Brunnenstraße') ||
+    l.startsWith('www.traderepublic.com') ||
+    l.startsWith('AG Charlottenburg') ||
+    l.startsWith('VAT-ID') ||
+    l === 'Directors' ||
+    l === 'Andreas Torner' ||
+    l === 'Gernot Mittendorfer' ||
+    l === 'Christian Hecker' ||
+    l === 'Thomas Pischke' ||
+    /^\d{5} Berlin$/.test(l)
+
   for (let i = 0; i < lines.length; i++) {
-    if (lines[i].includes('DATE') && lines[i].includes('TYPE') && lines[i].includes('DESCRIPTION')) {
-      headerLineIndex = i
-      break
-    }
-  }
-  
-  if (headerLineIndex === -1) {
-    return transactions // No transaction table found
-  }
-  
-  // Process transactions starting after the header
-  // Dates are split across lines: "DD MMM" on one line, "YYYY" on next
-  // Descriptions can also span multiple lines
-  for (let i = headerLineIndex + 1; i < lines.length; i++) {
     const line = lines[i]
-    
-    // Stop at summary sections or page breaks
-    if (line.includes('BALANCE OVERVIEW') || line.includes('ACCOUNT STATEMENT SUMMARY') || line.match(/^\d+ of \d+$/)) {
-      break
-    }
-    
-    // Check if this line starts with a date part (DD MMM)
-    const dateStartMatch = line.match(/^(\d{1,2})\s+([A-Za-z]{3})$/)
-    if (dateStartMatch) {
-      // Next line should have the year and transaction details
-      if (i + 1 < lines.length) {
-        const [, day, month] = dateStartMatch
-        let year = ''
-        let transactionParts: string[] = []
-        let j = i + 1
-        
-        // Get the year from the next line
-        if (j < lines.length) {
-          const yearLine = lines[j]
-          const yearMatch = yearLine.match(/^(\d{4})(?:\s+(.+))?$/)
-          if (yearMatch) {
-            year = yearMatch[1]
-            if (yearMatch[2]) {
-              transactionParts.push(yearMatch[2])
-            }
-            j++
-          } else {
-            continue // Invalid format, skip
-          }
-        }
-        
-        // Continue collecting lines until we find amounts (€) or another date
-        while (j < lines.length) {
-          const nextLine = lines[j]
-          // Stop if we hit another date or summary section
-          if (nextLine.match(/^\d{1,2}\s+[A-Za-z]{3}$/) || 
-              nextLine.includes('BALANCE OVERVIEW') || 
-              nextLine.includes('ACCOUNT STATEMENT SUMMARY')) {
-            break
-          }
-          
-          transactionParts.push(nextLine)
-          
-          // If this line has amounts (€), we're done collecting
-          if (nextLine.includes('€')) {
-            j++
-            break
-          }
-          
-          j++
-        }
-        
-        // Combine all transaction parts
-        const fullLine = `${day} ${month} ${year} ${transactionParts.join(' ')}`
-        const tx = parseTransactionLine(fullLine, day, month, year)
-        if (tx) {
-          transactions.push(tx)
-        }
-        
-        // Skip all the lines we processed
-        i = j - 1
+
+    // Stop at end-of-transactions section
+    if (line.includes('BALANCE OVERVIEW')) break
+
+    // Detect the three-line date pattern
+    if (!isDateLine(i)) continue
+
+    const day = lines[i]
+    const month = lines[i + 1].substring(0, 3) // normalise to 3-char for monthMap
+    const year = lines[i + 2]
+
+    const transactionParts: string[] = []
+    let j = i + 3
+
+    while (j < lines.length) {
+      const nextLine = lines[j]
+
+      // Stop at end-of-transactions
+      if (nextLine.includes('BALANCE OVERVIEW')) break
+
+      // Stop at the start of the next transaction
+      if (isDateLine(j)) break
+
+      // Skip page header/footer lines that appear between pages
+      if (isPageJunk(nextLine)) {
+        j++
+        continue
       }
+
+      transactionParts.push(nextLine)
+
+      // Once we've seen the € amounts line we're done with this transaction
+      if (nextLine.includes('€')) {
+        j++
+        break
+      }
+
+      j++
     }
+
+    if (transactionParts.length > 0) {
+      const fullLine = `${day} ${month} ${year} ${transactionParts.join(' ')}`
+      const tx = parseTransactionLine(fullLine, day, month, year)
+      if (tx) transactions.push(tx)
+    }
+
+    i = j - 1
   }
-  
+
   return transactions
 }
 

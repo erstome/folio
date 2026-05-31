@@ -389,9 +389,22 @@ export async function getQuotes(symbols: string[]) {
 
             for (const q of tdResults) {
                 if (q && q.symbol) {
-                    const price = parseFloat(q.close) || parseFloat(q.rate) || 0;
+                    // Skip per-symbol error responses (Twelvedata returns {code, message, symbol} for invalid symbols)
+                    if (q.status === 'error' || (q.code && q.code !== 200)) {
+                        console.warn(`[getQuotes] Twelvedata error for ${q.symbol}: ${q.message || q.code}`);
+                        continue; // Let Yahoo Finance handle this symbol
+                    }
+
+                    const price = parseFloat(q.close) || parseFloat(q.previous_close) || parseFloat(q.rate) || 0;
                     const change = parseFloat(q.change) || 0;
                     const changeP = parseFloat(q.percent_change) || 0;
+
+                    // Only mark as fetched if we actually got a valid price
+                    // If price is 0, fall through to Yahoo Finance fallback
+                    if (price <= 0) {
+                        console.warn(`[getQuotes] Twelvedata returned zero price for ${q.symbol}, will try Yahoo Finance.`);
+                        continue;
+                    }
 
                     const quoteData = {
                         price: price,
@@ -464,26 +477,37 @@ export async function getQuotes(symbols: string[]) {
             }
         } catch (error: any) {
             console.error("[getQuotes] Yahoo failed:", error.message)
-            // Final fallback: Return from DB if absolutely nothing else worked
-            try {
-                const cachedAssets = await prisma.asset.findMany({
-                    where: { symbol: { in: symbolsToFetch } },
-                    select: { symbol: true, lastPrice: true, lastCurrency: true, lastUpdate: true, name: true }
-                })
-                for (const asset of cachedAssets) {
-                    if (asset.lastPrice) {
-                        results[asset.symbol] = {
-                            price: asset.lastPrice,
-                            currency: asset.lastCurrency || 'USD',
-                            change: 0,
-                            changePercent: 0,
-                            name: asset.name || asset.symbol,
-                            lastUpdate: asset.lastUpdate,
-                            isCached: true
-                        }
-                    }
+        }
+    }
+
+    // 6. Final DB Fallback (always runs)
+    // For any original symbol still missing from results or with price=0,
+    // use the lastPrice stored in the DB from a previous successful fetch.
+    // This covers: ISINs that failed to resolve live, API outages, rate limits, etc.
+    // The detail page already uses asset.lastPrice, so this makes the board consistent.
+    const symbolsMissingPrice = uniqueSymbols.filter(s => !results[s] || !results[s].price);
+    if (symbolsMissingPrice.length > 0) {
+        try {
+            const cachedAssets = await prisma.asset.findMany({
+                where: { symbol: { in: symbolsMissingPrice } },
+                select: { symbol: true, lastPrice: true, lastCurrency: true, lastUpdate: true, name: true }
+            });
+            for (const asset of cachedAssets) {
+                if (asset.lastPrice) {
+                    console.log(`[getQuotes] Using DB cached price for ${asset.symbol}: ${asset.lastPrice}`);
+                    results[asset.symbol] = {
+                        price: asset.lastPrice,
+                        currency: asset.lastCurrency || 'USD',
+                        change: 0,
+                        changePercent: 0,
+                        name: asset.name || asset.symbol,
+                        lastUpdate: asset.lastUpdate,
+                        isCached: true
+                    };
                 }
-            } catch (e) { }
+            }
+        } catch (e) {
+            console.error('[getQuotes] DB fallback failed:', e);
         }
     }
 
