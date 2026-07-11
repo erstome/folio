@@ -5,28 +5,35 @@ import { useRouter } from 'next/navigation'
 import { Holding } from '@/app/types'
 import { cn } from '@/lib/utils'
 import { ArrowUpDown, Search, Trash2 } from 'lucide-react'
+import { toast } from 'sonner'
 import { deleteAsset } from '@/app/actions'
+import { useConfirm } from '@/components/ui/confirm-dialog'
 
 type SortKey = 'asset' | 'price' | 'balance' | 'value'
 type SortDirection = 'asc' | 'desc'
 
 export function HoldingsTable({ holdings, currency }: { holdings: Holding[], currency: string }) {
     const router = useRouter()
+    const confirmDialog = useConfirm()
     const [sortConfig, setSortConfig] = useState<{ key: SortKey, direction: SortDirection } | null>(null)
     const [filterQuery, setFilterQuery] = useState('')
     const [deletingSymbol, setDeletingSymbol] = useState<string | null>(null)
 
     const handleDelete = async (symbol: string) => {
-        if (!confirm(`Are you sure you want to delete ${symbol} and all its transactions?`)) {
-            return
-        }
+        const confirmed = await confirmDialog({
+            title: `Delete ${symbol}?`,
+            description: 'This will permanently delete the asset and all its transactions.',
+            confirmLabel: 'Delete',
+        })
+        if (!confirmed) return
         setDeletingSymbol(symbol)
         try {
             await deleteAsset(symbol)
+            toast.success(`${symbol} deleted`)
             router.refresh()
         } catch (error) {
             console.error('Failed to delete asset:', error)
-            alert('Failed to delete asset')
+            toast.error('Failed to delete asset')
         } finally {
             setDeletingSymbol(null)
         }
@@ -70,7 +77,7 @@ export function HoldingsTable({ holdings, currency }: { holdings: Holding[], cur
                 break
             case 'balance':
                 aValue = a.quantity
-                bValue = a.quantity
+                bValue = b.quantity
                 break
             case 'value':
                 aValue = a.marketValue || 0

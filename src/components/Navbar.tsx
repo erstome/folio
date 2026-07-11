@@ -3,7 +3,7 @@
 import Link from "next/link"
 import { CurrencySwitcher } from "@/components/CurrencySwitcher"
 import { HeaderActions } from "@/components/HeaderActions"
-import { ReactNode } from "react"
+import { ReactNode, Suspense } from "react"
 
 export function Navbar({ children }: { children?: ReactNode }) {
     return (
@@ -19,7 +19,9 @@ export function Navbar({ children }: { children?: ReactNode }) {
                     {/* Optional children actions (like specific page actions) */}
                     {children}
 
-                    <CurrencySwitcher />
+                    <Suspense>
+                        <CurrencySwitcher />
+                    </Suspense>
                     <HeaderActions />
                 </div>
             </div>

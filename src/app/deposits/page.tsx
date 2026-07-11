@@ -1,4 +1,4 @@
-import { getDeposits } from '@/app/actions'
+import { getDeposits, getQuotes } from '@/app/actions'
 import { DepositCard } from '@/components/DepositCard'
 import { AddDepositCTA } from '@/components/AddDepositCTA'
 import { HeaderActions } from '@/components/HeaderActions'
@@ -7,13 +7,26 @@ import { Navbar } from '@/components/Navbar'
 import { Wallet } from 'lucide-react'
 
 // Server Component
-export default async function DepositsPage() {
-    const deposits = await getDeposits()
+export default async function DepositsPage({ searchParams }: { searchParams: { currency?: string } }) {
+    const targetCurrency = searchParams?.currency || 'EUR'
+
+    const [deposits, rateResult] = await Promise.all([
+        getDeposits(),
+        getQuotes(['EURUSD=X']),
+    ])
+
+    const rateData = rateResult['EURUSD=X']
+    const usdPerEur = (rateData && rateData.price) ? rateData.price : 1.1
+
+    const convertToTarget = (amount: number, currency: string) => {
+        if (currency === targetCurrency) return amount
+        if (currency === 'EUR' && targetCurrency === 'USD') return amount * usdPerEur
+        if (currency === 'USD' && targetCurrency === 'EUR') return amount / usdPerEur
+        return amount
+    }
 
     function formatCurrency(val: number) {
-        // Defaulting to EUR for aggregation if mixed, in real app should normalize.
-        // Assuming EUR for MVP or using the first deposit's currency as heuristic
-        return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'EUR' }).format(val)
+        return new Intl.NumberFormat('en-US', { style: 'currency', currency: targetCurrency }).format(val)
     }
 
     const activeDeposits = deposits.filter(d => d.progress < 100)
@@ -22,10 +35,10 @@ export default async function DepositsPage() {
     // Calculate stats
     // Total Deposited should ONLY reflect Active deposits (current liquid cash in bank)
     // Matured deposits are either withdrawn or rolled over (which creates a new active one)
-    const totalDepositsValue = activeDeposits.reduce((sum, d) => sum + d.principal, 0)
+    const totalDepositsValue = activeDeposits.reduce((sum, d) => sum + convertToTarget(d.principal, d.currency), 0)
 
     // Lifetime Interest: Active (Accrued) + Matured (Final/Paid)
-    const totalInterest = deposits.reduce((sum, d) => sum + d.accruedInterest, 0)
+    const totalInterest = deposits.reduce((sum, d) => sum + convertToTarget(d.accruedInterest, d.currency), 0)
 
     return (
         <div className="min-h-screen pb-20">

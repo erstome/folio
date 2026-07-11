@@ -3,8 +3,11 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { AddTransactionDialog } from './AddTransactionDialog'
-import { TransactionData, deleteTransaction } from '@/app/actions'
+import { deleteTransaction } from '@/app/actions'
+import { TransactionData } from '@/app/types'
 import { Pencil, Trash2, ArrowUpDown, Search } from 'lucide-react'
+import { toast } from 'sonner'
+import { useConfirm } from '@/components/ui/confirm-dialog'
 
 // Extended type to include ID which comes from DB
 type Transaction = TransactionData & { id: string }
@@ -13,22 +16,27 @@ type SortDirection = 'asc' | 'desc'
 
 export function RecentTransactions({ transactions }: { transactions: Transaction[] }) {
     const router = useRouter()
+    const confirmDialog = useConfirm()
     const [editingTx, setEditingTx] = useState<Transaction | null>(null)
     const [sortConfig, setSortConfig] = useState<{ key: SortKey, direction: SortDirection } | null>(null)
     const [filterQuery, setFilterQuery] = useState('')
     const [deletingId, setDeletingId] = useState<string | null>(null)
 
     const handleDelete = async (id: string, symbol: string) => {
-        if (!confirm(`Are you sure you want to delete this ${symbol} transaction?`)) {
-            return
-        }
+        const confirmed = await confirmDialog({
+            title: 'Delete transaction?',
+            description: `This will permanently delete this ${symbol} transaction.`,
+            confirmLabel: 'Delete',
+        })
+        if (!confirmed) return
         setDeletingId(id)
         try {
             await deleteTransaction(id)
+            toast.success('Transaction deleted')
             router.refresh()
         } catch (error) {
             console.error('Failed to delete transaction:', error)
-            alert('Failed to delete transaction')
+            toast.error('Failed to delete transaction')
         } finally {
             setDeletingId(null)
         }

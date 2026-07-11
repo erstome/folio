@@ -4,7 +4,9 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { cn } from '@/lib/utils'
 import { ChevronDown, ChevronRight, Archive, Trash2 } from 'lucide-react'
+import { toast } from 'sonner'
 import { deleteAsset } from '@/app/actions'
+import { useConfirm } from '@/components/ui/confirm-dialog'
 
 type ClosedPosition = {
     symbol: string
@@ -27,6 +29,7 @@ export function ClosedPositionsTable({
     usdPerEur: number
 }) {
     const router = useRouter()
+    const confirmDialog = useConfirm()
     const [isOpen, setIsOpen] = useState(false)
     const [deletingSymbol, setDeletingSymbol] = useState<string | null>(null)
 
@@ -43,13 +46,19 @@ export function ClosedPositionsTable({
         `${val >= 0 ? '+' : ''}${val.toFixed(2)}%`
 
     const handleDelete = async (symbol: string) => {
-        if (!confirm(`Delete ${symbol} and all its transactions permanently?`)) return
+        const confirmed = await confirmDialog({
+            title: `Delete ${symbol}?`,
+            description: 'This will permanently delete the asset and all its transactions.',
+            confirmLabel: 'Delete',
+        })
+        if (!confirmed) return
         setDeletingSymbol(symbol)
         try {
             await deleteAsset(symbol)
+            toast.success(`${symbol} deleted`)
             router.refresh()
         } catch {
-            alert('Failed to delete asset')
+            toast.error('Failed to delete asset')
         } finally {
             setDeletingSymbol(null)
         }

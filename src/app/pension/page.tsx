@@ -1,16 +1,32 @@
-import { getPensions } from '@/app/actions'
+import { getPensions, getQuotes } from '@/app/actions'
 import { PensionCard } from '@/components/PensionCard'
 import { AddPensionCTA } from '@/components/AddPensionCTA'
 import { Navbar } from '@/components/Navbar'
 import { PiggyBank, Briefcase } from 'lucide-react'
 
 // Server Component
-export default async function PensionPage() {
-    const pensions = await getPensions()
-    const totalPensionValue = pensions.reduce((sum, p) => sum + p.totalValue, 0)
+export default async function PensionPage({ searchParams }: { searchParams: { currency?: string } }) {
+    const targetCurrency = searchParams?.currency || 'EUR'
+
+    const [pensions, rateResult] = await Promise.all([
+        getPensions(),
+        getQuotes(['EURUSD=X']),
+    ])
+
+    const rateData = rateResult['EURUSD=X']
+    const usdPerEur = (rateData && rateData.price) ? rateData.price : 1.1
+
+    const convertToTarget = (amount: number, currency: string) => {
+        if (currency === targetCurrency) return amount
+        if (currency === 'EUR' && targetCurrency === 'USD') return amount * usdPerEur
+        if (currency === 'USD' && targetCurrency === 'EUR') return amount / usdPerEur
+        return amount
+    }
+
+    const totalPensionValue = pensions.reduce((sum, p) => sum + convertToTarget(p.totalValue, p.currency), 0)
 
     function formatCurrency(val: number) {
-        return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'EUR' }).format(val)
+        return new Intl.NumberFormat('en-US', { style: 'currency', currency: targetCurrency }).format(val)
     }
 
     return (

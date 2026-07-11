@@ -101,7 +101,7 @@ export function PortfolioCharts({ holdings, currency = 'USD' }: { holdings: Hold
                             color: 'var(--foreground)'
                         }}
                         itemStyle={{ color: 'var(--foreground)' }}
-                        formatter={(value: number, name: string, entry: any) => [formatCurrency(value), entry.payload.name]}
+                        formatter={(value, name, entry: any) => [formatCurrency(Number(value) || 0), entry.payload.name]}
                     />
                 </PieChart>
             </ResponsiveContainer>

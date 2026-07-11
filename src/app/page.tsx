@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Navbar } from "@/components/Navbar";
-import { PortfolioCharts, Holding } from "@/components/PortfolioCharts";
+import { PortfolioCharts } from "@/components/PortfolioCharts";
+import { Holding } from "@/app/types";
 import { getPortfolio, getQuotes, getDeposits, getPensions } from "./actions";
 import { cn } from "@/lib/utils";
 import { LayoutDashboard, TrendingUp, Wallet, ArrowUpRight, ArrowDownRight, MoreHorizontal, PiggyBank } from "lucide-react";
@@ -148,28 +149,30 @@ export default async function Home({ searchParams }: { searchParams: { currency?
                 {/* Quick Stats */}
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                     {/* Investments */}
-                    <div className="bg-card/50 border border-border rounded-xl p-6 relative overflow-hidden group">
-                        <div className="absolute top-0 right-0 p-6 opacity-10 group-hover:opacity-20 transition-opacity">
-                            <TrendingUp className="w-16 h-16 text-indigo-500" />
-                        </div>
-                        <div className="relative z-10">
-                            <div className="flex items-center gap-3 mb-2">
-                                <div className="p-2 bg-indigo-500/10 rounded-lg text-indigo-500">
-                                    <TrendingUp className="w-5 h-5" />
+                    <Link href={`/investments?currency=${targetCurrency}`} className="block">
+                        <div className="bg-card/50 border border-border rounded-xl p-6 relative overflow-hidden group hover:border-border/80 transition-colors cursor-pointer">
+                            <div className="absolute top-0 right-0 p-6 opacity-10 group-hover:opacity-20 transition-opacity">
+                                <TrendingUp className="w-16 h-16 text-indigo-500" />
+                            </div>
+                            <div className="relative z-10">
+                                <div className="flex items-center gap-3 mb-2">
+                                    <div className="p-2 bg-indigo-500/10 rounded-lg text-indigo-500">
+                                        <TrendingUp className="w-5 h-5" />
+                                    </div>
+                                    <h3 className="text-muted-foreground font-medium">Investments</h3>
                                 </div>
-                                <h3 className="text-muted-foreground font-medium">Investments</h3>
-                            </div>
-                            <div className="text-3xl font-bold text-foreground tracking-tight">
-                                {formatCurrency(totalPortfolioValue)}
-                            </div>
-                            <div className={`text-sm mt-1 font-medium ${totalInvestmentsGain >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
-                                {totalInvestmentsGain >= 0 ? '+' : ''}{formatCurrency(totalInvestmentsGain)} ({totalInvestmentsGainPercent.toFixed(2)}%)
+                                <div className="text-3xl font-bold text-foreground tracking-tight">
+                                    {formatCurrency(totalPortfolioValue)}
+                                </div>
+                                <div className={`text-sm mt-1 font-medium ${totalInvestmentsGain >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
+                                    {totalInvestmentsGain >= 0 ? '+' : ''}{formatCurrency(totalInvestmentsGain)} ({totalInvestmentsGainPercent.toFixed(2)}%)
+                                </div>
                             </div>
                         </div>
-                    </div>
+                    </Link>
 
                     {/* Deposits */}
-                    <Link href="/deposits" className="block">
+                    <Link href={`/deposits?currency=${targetCurrency}`} className="block">
                         <div className="bg-card/50 border border-border rounded-xl p-6 relative overflow-hidden group hover:border-border/80 transition-colors cursor-pointer">
                             <div className="absolute top-0 right-0 p-6 opacity-10 group-hover:opacity-20 transition-opacity">
                                 <Wallet className="w-16 h-16 text-emerald-500" />
@@ -192,7 +195,7 @@ export default async function Home({ searchParams }: { searchParams: { currency?
                     </Link>
 
                     {/* Pensions */}
-                    <Link href="/pension" className="block">
+                    <Link href={`/pension?currency=${targetCurrency}`} className="block">
                         <div className="bg-card/50 border border-border rounded-xl p-6 relative overflow-hidden group hover:border-border/80 transition-colors cursor-pointer">
                             <div className="absolute top-0 right-0 p-6 opacity-10 group-hover:opacity-20 transition-opacity">
                                 <PiggyBank className="w-16 h-16 text-amber-500" />

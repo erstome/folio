@@ -128,6 +128,7 @@ export async function getTransactions() {
 
     return transactions.map(t => ({
         ...t,
+        type: t.type as TransactionData['type'],
         symbol: t.assetId,
         assetName: t.asset.name
     }))
@@ -235,6 +236,7 @@ export async function getSoldPortfolio() {
         let quantity = 0
         let totalCost = 0   // USD
         let proceeds = 0    // USD (total sell revenue)
+        let costOfSold = 0  // USD (average-cost basis of the shares actually sold)
         let lastDate: Date | null = null as Date | null
 
         asset.transactions.forEach((t) => {
@@ -248,6 +250,7 @@ export async function getSoldPortfolio() {
                 if (quantity > 0) {
                     const avgCost = totalCost / quantity
                     proceeds += t.quantity * txPriceInUsd
+                    costOfSold += t.quantity * avgCost
                     quantity -= t.quantity
                     totalCost -= t.quantity * avgCost
                 } else {
@@ -257,7 +260,7 @@ export async function getSoldPortfolio() {
             }
         })
 
-        // Total invested = sum of all BUY cost (minus cost basis for shares never sold)
+        // Total invested = sum of all BUY cost (display only; gain is measured against costOfSold)
         const totalInvested = asset.transactions
             .filter(t => t.type === 'BUY')
             .reduce((sum, t) => {
@@ -266,8 +269,8 @@ export async function getSoldPortfolio() {
                 return sum + t.quantity * txPriceInUsd
             }, 0)
 
-        const realizedGain = proceeds - totalInvested
-        const realizedGainPercent = totalInvested > 0 ? (realizedGain / totalInvested) * 100 : 0
+        const realizedGain = proceeds - costOfSold
+        const realizedGainPercent = costOfSold > 0 ? (realizedGain / costOfSold) * 100 : 0
 
         return {
             symbol: asset.symbol,
@@ -389,11 +392,12 @@ async function resolveISIN(isin: string): Promise<string | null> {
         const result = await yahooFinance.search(isin);
         if (result.quotes && result.quotes.length > 0) {
             // Pick first equity/ETF result
-            const bestMatch = result.quotes.find((q: any) => q.isYahooFinance);
+            const bestMatch: any = result.quotes.find((q: any) => q.isYahooFinance);
             if (bestMatch && bestMatch.symbol) {
-                console.log(`[resolveISIN] Resolved ${isin} -> ${bestMatch.symbol}`);
-                ISIN_CACHE[isin] = { ticker: bestMatch.symbol, timestamp: Date.now() };
-                return bestMatch.symbol;
+                const ticker = String(bestMatch.symbol);
+                console.log(`[resolveISIN] Resolved ${isin} -> ${ticker}`);
+                ISIN_CACHE[isin] = { ticker, timestamp: Date.now() };
+                return ticker;
             }
         }
     } catch (e) {
@@ -1016,7 +1020,7 @@ export async function importTradeRepublicStatement(fileData: string, fileName: s
         // Use the parse function (which we just created)
         const parseResult = await parseTradeRepublicStatement(fileData)
         if (!parseResult.success) {
-            return parseResult
+            return { success: false, error: parseResult.error, imported: 0, skipped: 0, errors: [] as string[] }
         }
 
         const parserModule = await import('@/lib/trade-republic-parser')
@@ -1049,7 +1053,7 @@ export async function importTradeRepublicStatement(fileData: string, fileName: s
                 // Import as transaction (symbol will be the ISIN)
                 await addTransaction({
                     symbol,
-                    type: tx.type,
+                    type: tx.type as 'BUY' | 'SELL', // parse filter above only passes BUY/SELL through
                     quantity: tx.quantity,
                     price,
                     date: tx.date,
@@ -1651,7 +1655,9 @@ export async function getAssetDetails(symbol: string) {
             lifetimeInvested,
             lifetimeSales,
             totalLifetimeGain,
-            totalLifetimeGainPercent: lifetimeInvested > 0 ? (totalLifetimeGain / lifetimeInvested) * 100 : 0
+            totalLifetimeGainPercent: lifetimeInvested > 0 ? (totalLifetimeGain / lifetimeInvested) * 100 : 0,
+            currentHoldings,
+            currentValuation
         }
     };
 }

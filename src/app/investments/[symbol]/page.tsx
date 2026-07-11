@@ -64,6 +64,7 @@ export default async function AssetDetailPage({
         lifetimeInvested:  (stats?.lifetimeInvested  || 0) * conversionRate,
         lifetimeSales:     (stats?.lifetimeSales      || 0) * conversionRate,
         totalLifetimeGain: (stats?.totalLifetimeGain  || 0) * conversionRate,
+        currentValuation:  (stats?.currentValuation   || 0) * conversionRate,
         // totalLifetimeGainPercent is a ratio — no conversion
     };
 
@@ -82,7 +83,7 @@ export default async function AssetDetailPage({
                 {/* Header / Nav */}
                 <div className="flex items-center gap-4 justify-between">
                     <div className="flex items-center gap-4">
-                        <Link href="/" className="p-2 -ml-2 text-muted-foreground hover:text-foreground transition-colors rounded-lg hover:bg-muted">
+                        <Link href={`/investments?currency=${targetCurrency}`} className="p-2 -ml-2 text-muted-foreground hover:text-foreground transition-colors rounded-lg hover:bg-muted">
                             <ArrowLeft className="w-5 h-5" />
                         </Link>
                         <div>
@@ -122,6 +123,19 @@ export default async function AssetDetailPage({
                         </div>
                         <div className="text-sm text-muted-foreground mt-1">
                             {formatPct(stats?.totalLifetimeGainPercent || 0)} Return
+                        </div>
+                    </div>
+
+                    <div className="bg-card border border-border rounded-xl p-6">
+                        <div className="flex items-center gap-2 text-muted-foreground mb-2">
+                            <TrendingUp className="w-4 h-4" />
+                            <span className="text-sm font-medium">Current Position</span>
+                        </div>
+                        <div className="text-2xl font-bold text-foreground">
+                            {formatCurrency(convertedStats.currentValuation)}
+                        </div>
+                        <div className="text-sm text-muted-foreground mt-1">
+                            {stats?.currentHoldings || 0} shares
                         </div>
                     </div>
                 </div>

@@ -1,6 +1,6 @@
 export type TransactionData = {
     symbol: string
-    type: 'BUY' | 'SELL' | 'DEPOSIT'
+    type: 'BUY' | 'SELL' | 'DIVIDEND' | 'INTEREST' | 'DEPOSIT'
     quantity: number
     price: number
     currency?: string

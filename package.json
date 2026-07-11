@@ -1,5 +1,5 @@
 {
-  "name": "stocks_app",
+  "name": "folio",
   "version": "0.1.0",
   "private": true,
   "scripts": {
@@ -21,6 +21,7 @@
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "recharts": "^3.5.1",
+    "sonner": "^2.0.7",
     "tailwind-merge": "^3.4.0",
     "xlsx": "^0.18.5",
     "yahoo-finance2": "^3.10.2"
