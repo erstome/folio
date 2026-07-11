@@ -160,7 +160,13 @@ export function RecentTransactions({ transactions }: { transactions: Transaction
                                         <div className="text-xs text-muted-foreground font-normal">({tx.symbol})</div>
                                     </td>
                                     <td className="px-6 py-4">
-                                        <span className={`inline-flex items-center px-2 py-1 rounded-md text-xs font-medium ${tx.type === 'BUY' ? 'bg-emerald-500/10 text-emerald-500' : 'bg-rose-500/10 text-rose-500'}`}>
+                                        <span className={`inline-flex items-center px-2 py-1 rounded-md text-xs font-medium ${
+                                            tx.type === 'BUY' ? 'bg-emerald-500/10 text-emerald-500' :
+                                            tx.type === 'SELL' ? 'bg-rose-500/10 text-rose-500' :
+                                            tx.type === 'DIVIDEND' ? 'bg-sky-500/10 text-sky-500' :
+                                            tx.type === 'INTEREST' ? 'bg-amber-500/10 text-amber-500' :
+                                            'bg-zinc-500/10 text-zinc-400'
+                                        }`}>
                                             {tx.type}
                                         </span>
                                     </td>

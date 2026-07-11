@@ -174,7 +174,13 @@ export default async function AssetDetailPage({
                                             <td className="px-6 py-4 font-medium text-foreground">
                                                 {new Date(t.date).toLocaleDateString()}
                                             </td>
-                                            <td className={`px-6 py-4 font-medium ${t.type === 'BUY' ? 'text-emerald-500' : 'text-rose-500'}`}>
+                                            <td className={`px-6 py-4 font-medium ${
+                                                t.type === 'BUY' ? 'text-emerald-500' :
+                                                t.type === 'SELL' ? 'text-rose-500' :
+                                                t.type === 'DIVIDEND' ? 'text-sky-500' :
+                                                t.type === 'INTEREST' ? 'text-amber-500' :
+                                                'text-zinc-400'
+                                            }`}>
                                                 {t.type}
                                             </td>
                                             <td className="px-6 py-4 text-right tabular-nums text-foreground">

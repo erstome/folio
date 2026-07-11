@@ -6,6 +6,11 @@ import path from 'path'
 import { TransactionData, DepositData, PensionData } from './types'
 import { yahooFinance, getOAuthClient, google, fs, DB_PATH } from '@/lib/server-services'
 
+// Only BUY/SELL rows affect holdings, cost basis, and Dietz flows.
+// Income rows (DIVIDEND/INTEREST) and DEPOSIT principal must never be
+// treated as trades — a non-BUY row is NOT implicitly a SELL.
+const isTrade = (t: { type: string }) => t.type === 'BUY' || t.type === 'SELL'
+
 // --- Settings Actions ---
 
 export async function getSettings() {
@@ -170,6 +175,7 @@ export async function getPortfolio() {
         let totalCost = 0 // In USD
 
         asset.transactions.forEach((t) => {
+            if (!isTrade(t)) return
             // Normalize Price to USD
             // @ts-ignore
             const txCurrency = t.currency || 'USD';
@@ -240,6 +246,7 @@ export async function getSoldPortfolio() {
         let lastDate: Date | null = null as Date | null
 
         asset.transactions.forEach((t) => {
+            if (!isTrade(t)) return
             const txCurrency = (t.currency as string) || 'USD';
             const txPriceInUsd = txCurrency === 'EUR' ? t.price * eurUsdRate : t.price;
 
@@ -1524,7 +1531,7 @@ export async function getAssetDetails(symbol: string) {
             // Prefer the last transaction price in this month (best available proxy),
             // then carry forward the last known historical price,
             // then fall back to current market price as a last resort.
-            const lastTxPrice = [...txsInMonth].reverse().find(t => t.price > 0)?.price ?? 0;
+            const lastTxPrice = [...txsInMonth].reverse().find(t => isTrade(t) && t.price > 0)?.price ?? 0;
             if (lastTxPrice > 0) {
                 endPrice = lastTxPrice;
                 lastKnownEndPrice = lastTxPrice;
@@ -1542,6 +1549,7 @@ export async function getAssetDetails(symbol: string) {
         let totalDaysInMonth = monthEnd.getDate();
 
         txsInMonth.forEach(t => {
+            if (!isTrade(t)) return; // income rows are not external flows (price-return TWR)
             const amount = t.quantity * t.price;
             const flow = t.type === 'BUY' ? amount : -amount;
 
@@ -1571,7 +1579,7 @@ export async function getAssetDetails(symbol: string) {
         // Record this month's endPrice so next iteration can use it as startPrice fallback
         prevIterEndPrice = endPrice;
 
-        const holdingsAtStart = currentHoldings - (txsInMonth.reduce((acc, t) => acc + (t.type === 'BUY' ? t.quantity : -t.quantity), 0));
+        const holdingsAtStart = currentHoldings - (txsInMonth.reduce((acc, t) => acc + (t.type === 'BUY' ? t.quantity : t.type === 'SELL' ? -t.quantity : 0), 0));
         const startValue = holdingsAtStart * startPrice; // V_start
         const endValue = currentHoldings * endPrice; // V_end
 
@@ -1771,10 +1779,11 @@ export async function getPortfolioPerformance(targetCurrency = 'EUR') {
             // Holdings BEFORE this month
             // We can calculate this by filtering all transactions < monthStart
             const txsBefore = asset.transactions.filter(t => new Date(t.date) < monthStart);
-            let holdingsStart = txsBefore.reduce((acc, t) => acc + (t.type === 'BUY' ? t.quantity : -t.quantity), 0);
+            let holdingsStart = txsBefore.reduce((acc, t) => acc + (t.type === 'BUY' ? t.quantity : t.type === 'SELL' ? -t.quantity : 0), 0);
             let holdingsEnd = holdingsStart;
 
             txsInMonth.forEach(t => {
+                if (!isTrade(t)) return; // income rows are not external flows (price-return TWR)
                 const flow = (t.type === 'BUY' ? 1 : -1) * (t.quantity * t.price);
                 assetNetInvested += flow;
                 holdingsEnd += (t.type === 'BUY' ? t.quantity : -t.quantity);

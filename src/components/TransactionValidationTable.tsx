@@ -128,6 +128,8 @@ export function TransactionValidationTable({
                       <span className={`inline-flex items-center px-2 py-1 rounded text-xs font-medium ${
                         tx.type === 'BUY' ? 'bg-emerald-500/10 text-emerald-400' :
                         tx.type === 'SELL' ? 'bg-rose-500/10 text-rose-400' :
+                        tx.type === 'DIVIDEND' ? 'bg-sky-500/10 text-sky-400' :
+                        tx.type === 'INTEREST' ? 'bg-amber-500/10 text-amber-400' :
                         'bg-zinc-500/10 text-zinc-400'
                       }`}>
                         {tx.type}
