@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { createPortal } from 'react-dom'
 import { Plus, Loader2, X } from 'lucide-react'
+import { toast } from 'sonner'
 import { addTransaction, updateTransaction } from '@/app/actions'
 import { TransactionData } from '@/app/types'
 
@@ -16,6 +17,10 @@ type Props = {
 export function AddTransactionDialog({ isOpen, onClose, transactionId, initialData }: Props) {
     const [loading, setLoading] = useState(false)
     const [mounted, setMounted] = useState(false)
+    const [txType, setTxType] = useState<TransactionData['type']>(initialData?.type || 'BUY')
+
+    // Income rows have no share quantity; they are stored as 1 unit at price=amount
+    const isIncome = txType === 'DIVIDEND' || txType === 'INTEREST'
 
     useEffect(() => {
         setMounted(true)
@@ -27,10 +32,11 @@ export function AddTransactionDialog({ isOpen, onClose, transactionId, initialDa
         const formData = new FormData(e.currentTarget)
 
         try {
+            const type = formData.get('type') as TransactionData['type']
             const data = {
                 symbol: formData.get('symbol') as string,
-                type: formData.get('type') as 'BUY' | 'SELL',
-                quantity: parseFloat(formData.get('quantity') as string),
+                type,
+                quantity: (type === 'DIVIDEND' || type === 'INTEREST') ? 1 : parseFloat(formData.get('quantity') as string),
                 price: parseFloat(formData.get('price') as string),
                 currency: formData.get('currency') as string,
                 date: new Date(formData.get('date') as string),
@@ -46,7 +52,7 @@ export function AddTransactionDialog({ isOpen, onClose, transactionId, initialDa
             // For now, closing is enough. 
         } catch (err) {
             console.error(err)
-            alert('Failed to save transaction')
+            toast.error('Failed to save transaction')
         } finally {
             setLoading(false)
         }
@@ -83,11 +89,14 @@ export function AddTransactionDialog({ isOpen, onClose, transactionId, initialDa
                             <label className="text-sm font-medium text-muted-foreground">Type</label>
                             <select
                                 name="type"
-                                defaultValue={initialData?.type}
+                                value={txType}
+                                onChange={(e) => setTxType(e.target.value as TransactionData['type'])}
                                 className="w-full bg-background border border-border rounded-lg px-4 py-2 text-foreground focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
                             >
                                 <option value="BUY">Buy</option>
                                 <option value="SELL">Sell</option>
+                                <option value="DIVIDEND">Dividend</option>
+                                <option value="INTEREST">Interest</option>
                             </select>
                         </div>
                         <div className="space-y-2">
@@ -102,21 +111,23 @@ export function AddTransactionDialog({ isOpen, onClose, transactionId, initialDa
                         </div>
                     </div>
 
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className={`grid gap-4 ${isIncome ? 'grid-cols-1' : 'grid-cols-2'}`}>
+                        {!isIncome && (
+                            <div className="space-y-2">
+                                <label className="text-sm font-medium text-muted-foreground">Quantity</label>
+                                <input
+                                    type="number"
+                                    step="any"
+                                    name="quantity"
+                                    required
+                                    defaultValue={initialData?.quantity}
+                                    placeholder="0"
+                                    className="w-full bg-background border border-border rounded-lg px-4 py-2 text-foreground placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
+                                />
+                            </div>
+                        )}
                         <div className="space-y-2">
-                            <label className="text-sm font-medium text-muted-foreground">Quantity</label>
-                            <input
-                                type="number"
-                                step="any"
-                                name="quantity"
-                                required
-                                defaultValue={initialData?.quantity}
-                                placeholder="0"
-                                className="w-full bg-background border border-border rounded-lg px-4 py-2 text-foreground placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
-                            />
-                        </div>
-                        <div className="space-y-2">
-                            <label className="text-sm font-medium text-muted-foreground">Price</label>
+                            <label className="text-sm font-medium text-muted-foreground">{isIncome ? 'Amount' : 'Price'}</label>
                             <div className="flex gap-2">
                                 <input
                                     type="number"

@@ -1704,6 +1704,75 @@ export async function getAssetDetails(symbol: string) {
     };
 }
 
+// --- Income (Dividends / Interest) ---
+
+export async function getIncomeSummary(targetCurrency = 'EUR') {
+    const incomeTxs = await prisma.transaction.findMany({
+        where: { type: { in: ['DIVIDEND', 'INTEREST'] } },
+        include: { asset: { select: { name: true } } },
+        orderBy: { date: 'asc' }
+    })
+
+    if (incomeTxs.length === 0) {
+        return { totalIncome: 0, totalDividends: 0, totalInterest: 0, byMonth: [], bySymbol: [] }
+    }
+
+    let eurUsdRate = 1.1
+    try {
+        const rateResult = await getQuotes(['EURUSD=X'])
+        const rateQuote = rateResult['EURUSD=X']
+        if (rateQuote && rateQuote.price) eurUsdRate = rateQuote.price
+    } catch (e) { /* use default */ }
+
+    const convert = (amount: number, currency: string) => {
+        if (currency === targetCurrency) return amount
+        if (currency === 'EUR' && targetCurrency === 'USD') return amount * eurUsdRate
+        if (currency === 'USD' && targetCurrency === 'EUR') return amount / eurUsdRate
+        return amount
+    }
+
+    let totalDividends = 0
+    let totalInterest = 0
+    const byMonthMap = new Map<number, { month: string; monthSortable: number; dividends: number; interest: number }>()
+    const bySymbolMap = new Map<string, { symbol: string; name: string; total: number }>()
+
+    for (const t of incomeTxs) {
+        const amount = convert(t.quantity * t.price, t.currency || 'EUR')
+        const d = new Date(t.date)
+        const monthKey = d.getFullYear() * 100 + d.getMonth()
+
+        if (!byMonthMap.has(monthKey)) {
+            byMonthMap.set(monthKey, {
+                month: d.toLocaleDateString('en-US', { month: 'short', year: 'numeric' }),
+                monthSortable: new Date(d.getFullYear(), d.getMonth(), 1).getTime(),
+                dividends: 0,
+                interest: 0,
+            })
+        }
+        const monthEntry = byMonthMap.get(monthKey)!
+
+        if (t.type === 'DIVIDEND') {
+            totalDividends += amount
+            monthEntry.dividends += amount
+        } else {
+            totalInterest += amount
+            monthEntry.interest += amount
+        }
+
+        const symbolEntry = bySymbolMap.get(t.assetId) || { symbol: t.assetId, name: t.asset.name || t.assetId, total: 0 }
+        symbolEntry.total += amount
+        bySymbolMap.set(t.assetId, symbolEntry)
+    }
+
+    return {
+        totalIncome: totalDividends + totalInterest,
+        totalDividends,
+        totalInterest,
+        byMonth: Array.from(byMonthMap.values()).sort((a, b) => a.monthSortable - b.monthSortable),
+        bySymbol: Array.from(bySymbolMap.values()).sort((a, b) => b.total - a.total),
+    }
+}
+
 // --- Global Portfolio Performance Logic ---
 
 export async function getPortfolioPerformance(targetCurrency = 'EUR') {

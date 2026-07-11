@@ -4,24 +4,26 @@ import { HoldingsTable } from "@/components/HoldingsTable";
 import { RecentTransactions } from "@/components/RecentTransactions";
 import { ImportButton } from "@/components/ImportButton";
 import { ImportXTBButton } from "@/components/ImportXTBButton";
-import { getPortfolio, getQuotes, getTransactions, updateAssetName, syncHistoricalPrices, getPortfolioPerformance, getSoldPortfolio } from "../actions";
+import { getPortfolio, getQuotes, getTransactions, updateAssetName, syncHistoricalPrices, getPortfolioPerformance, getSoldPortfolio, getIncomeSummary } from "../actions";
 import { cn } from "@/lib/utils";
 import { LineChart, Calendar } from 'lucide-react';
 import { Holding } from "@/app/types";
 import { MonthlyPerformanceTable } from "@/components/MonthlyPerformanceTable";
 import { ClosedPositionsTable } from "@/components/ClosedPositionsTable";
 import { PortfolioValueChart } from "@/components/PortfolioValueChart";
+import { IncomeSummary } from "@/components/IncomeSummary";
 
 export default async function InvestmentsPage({ searchParams }: { searchParams: { currency?: string } }) {
     const targetCurrency = searchParams?.currency || 'EUR';
     const isEur = targetCurrency === 'EUR';
 
     // 1. Fetch Data
-    const [rawPortfolio, transactions, globalPerformance, soldPortfolio] = await Promise.all([
+    const [rawPortfolio, transactions, globalPerformance, soldPortfolio, incomeSummary] = await Promise.all([
         getPortfolio(),
         getTransactions(),
         getPortfolioPerformance(targetCurrency),
         getSoldPortfolio(),
+        getIncomeSummary(targetCurrency),
     ]);
 
     const syncSymbols = Array.from(new Set(rawPortfolio.map(p => p.symbol)));
@@ -172,6 +174,8 @@ export default async function InvestmentsPage({ searchParams }: { searchParams: 
                                 <h3 className="text-xl font-bold text-white mb-6">Asset Allocation</h3>
                                 <PortfolioCharts holdings={enrichedPortfolio} currency={targetCurrency} />
                             </div>
+
+                            <IncomeSummary income={incomeSummary} currency={targetCurrency} />
                         </div>
                     </div>
                 </div>
