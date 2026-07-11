@@ -213,6 +213,18 @@ function parseTransactionLine(line: string, day?: string, month?: string, year?:
   } else {
     // Non-trade transactions
     type = mapTradeRepublicType(typeStr)
+
+    // Dividend lines carry the paying asset's ISIN ("Earnings ... ISIN Asset Name €X €Y")
+    if (type === 'DIVIDEND') {
+      const isinMatch = rest.match(/\b([A-Z]{2}[A-Z0-9]{9}[0-9])\b/)
+      if (isinMatch) {
+        symbol = isinMatch[1]
+        const nameChunk = rest.substring(isinMatch.index! + isinMatch[0].length).split('€')[0]
+        const cleaned = nameChunk.replace(/,\s*$/, '').trim()
+        assetName = cleaned || undefined
+      }
+    }
+
     // For non-trade transactions (Transfer, Interest, etc.)
     // Extract amounts
     const amounts = rest.match(/€([\d,]+\.?\d*)/g)

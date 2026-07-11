@@ -2,7 +2,7 @@ import * as XLSX from 'xlsx'
 
 export interface XTBTransaction {
     date: Date
-    type: 'BUY' | 'SELL'
+    type: 'BUY' | 'SELL' | 'DIVIDEND'
     description: string
     symbol: string
     quantity: number
@@ -39,6 +39,10 @@ export function parseXTBStatement(buffer: Buffer): XTBTransaction[] {
     const rows = XLSX.utils.sheet_to_json<unknown[]>(ws, { header: 1, defval: '' })
 
     const transactions: XTBTransaction[] = []
+    // Dividend rows are paired with separate "Withholding tax" rows (same
+    // ticker + day); collect both and emit one net DIVIDEND per pair.
+    const dividends: { date: Date; ticker: string; instrument: string; amount: number }[] = []
+    const withholdingTaxes: { date: Date; ticker: string; amount: number }[] = []
 
     for (const rawRow of rows.slice(5)) {
         const row = rawRow as unknown[]
@@ -49,13 +53,14 @@ export function parseXTBStatement(buffer: Buffer): XTBTransaction[] {
         const amountRaw = row[4]
         const comment = String(row[6] ?? '').trim()
 
-        if (type !== 'Stock purchase' && type !== 'Stock sale') continue
+        const isTradeRow = type === 'Stock purchase' || type === 'Stock sale'
+        const isDividendRow = /^divid/i.test(type) // XTB uses both "Dividend" and "DIVIDENT"
+        const isTaxRow = /^withholding tax$/i.test(type)
+        if (!isTradeRow && !isDividendRow && !isTaxRow) continue
         if (!ticker) continue
 
-        const txType: 'BUY' | 'SELL' = type === 'Stock purchase' ? 'BUY' : 'SELL'
         const rawAmount = typeof amountRaw === 'number' ? amountRaw : parseFloat(String(amountRaw))
-        const amount = Math.abs(rawAmount)
-        if (!amount || isNaN(amount)) continue
+        if (!rawAmount || isNaN(rawAmount)) continue
 
         let date: Date
         if (typeof timeRaw === 'number') {
@@ -65,6 +70,18 @@ export function parseXTBStatement(buffer: Buffer): XTBTransaction[] {
         } else {
             continue
         }
+
+        if (isDividendRow) {
+            dividends.push({ date, ticker: ticker.toUpperCase(), instrument, amount: Math.abs(rawAmount) })
+            continue
+        }
+        if (isTaxRow) {
+            withholdingTaxes.push({ date, ticker: ticker.toUpperCase(), amount: Math.abs(rawAmount) })
+            continue
+        }
+
+        const txType: 'BUY' | 'SELL' = type === 'Stock purchase' ? 'BUY' : 'SELL'
+        const amount = Math.abs(rawAmount)
 
         const parsed = parseComment(comment)
         if (!parsed) continue
@@ -78,6 +95,26 @@ export function parseXTBStatement(buffer: Buffer): XTBTransaction[] {
             amount,
             currency: 'EUR',
             assetName: instrument || undefined,
+        })
+    }
+
+    // Net each dividend against its withholding tax (matched by ticker + calendar day)
+    const sameDay = (a: Date, b: Date) => a.toISOString().split('T')[0] === b.toISOString().split('T')[0]
+    for (const div of dividends) {
+        const taxIdx = withholdingTaxes.findIndex(t => t.ticker === div.ticker && sameDay(t.date, div.date))
+        const tax = taxIdx >= 0 ? withholdingTaxes.splice(taxIdx, 1)[0].amount : 0
+        const net = div.amount - tax
+        if (net <= 0) continue
+
+        transactions.push({
+            date: div.date,
+            type: 'DIVIDEND',
+            description: `Dividend ${div.instrument || div.ticker}`,
+            symbol: div.ticker,
+            quantity: 1,
+            amount: net,
+            currency: 'EUR',
+            assetName: div.instrument || undefined,
         })
     }
 

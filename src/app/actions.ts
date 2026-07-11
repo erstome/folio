@@ -11,6 +11,24 @@ import { yahooFinance, getOAuthClient, google, fs, DB_PATH } from '@/lib/server-
 // treated as trades — a non-BUY row is NOT implicitly a SELL.
 const isTrade = (t: { type: string }) => t.type === 'BUY' || t.type === 'SELL'
 
+// Shared duplicate check for statement imports: same asset + type + quantity,
+// price within ±0.001 and timestamp within ±30 min. Tight enough that two real
+// same-day fills at different prices/times are not falsely merged.
+async function findDuplicateTransaction(assetId: string, type: string, quantity: number, price: number, date: Date) {
+    return prisma.transaction.findFirst({
+        where: {
+            assetId,
+            type,
+            quantity,
+            price: { gte: price - 0.001, lte: price + 0.001 },
+            date: {
+                gte: new Date(date.getTime() - 1800000),
+                lte: new Date(date.getTime() + 1800000),
+            }
+        }
+    })
+}
+
 // --- Settings Actions ---
 
 export async function getSettings() {
@@ -1002,15 +1020,17 @@ export async function parseTradeRepublicStatement(fileData: string) {
         // Parse the PDF
         const transactions = await parseTradeRepublicStatement(buffer)
 
-        // Return parsed transactions (only BUY/SELL for now)
+        // Keep trades plus income rows (dividends need an ISIN; interest has none)
         return {
             success: true,
-            transactions: transactions.filter(tx =>
-                (tx.type === 'BUY' || tx.type === 'SELL') &&
-                tx.symbol &&
-                tx.quantity &&
-                tx.amount > 0
-            )
+            transactions: transactions
+                .filter(tx =>
+                    ((tx.type === 'BUY' || tx.type === 'SELL') && tx.symbol && tx.quantity && tx.amount > 0) ||
+                    (tx.type === 'DIVIDEND' && tx.symbol && tx.amount > 0) ||
+                    (tx.type === 'INTEREST' && tx.amount > 0)
+                )
+                // Income rows have no share quantity; store them as 1 unit at price=amount
+                .map(tx => (tx.type === 'DIVIDEND' || tx.type === 'INTEREST') ? { ...tx, quantity: 1 } : tx)
         }
     } catch (e) {
         console.error("Failed to parse Trade Republic statement", e)
@@ -1045,22 +1065,52 @@ export async function importTradeRepublicStatement(fileData: string, fileName: s
 
         // Import each transaction
         for (const tx of transactionsToImport) {
-            if (!tx.symbol || !tx.quantity || tx.amount === 0) {
-                skipped++
-                continue
-            }
-
             try {
+                if (tx.type === 'INTEREST') {
+                    if (!(tx.amount > 0)) { skipped++; continue }
+
+                    // Interest has no ISIN: book it on a synthetic INCOME asset,
+                    // which portfolio/quote/sync paths never touch (STOCK/ETF/CRYPTO filters).
+                    const existing = await findDuplicateTransaction('TR-INTEREST', 'INTEREST', 1, tx.amount, tx.date)
+                    if (existing) { skipped++; continue }
+
+                    await prisma.asset.upsert({
+                        where: { symbol: 'TR-INTEREST' },
+                        update: {},
+                        create: { symbol: 'TR-INTEREST', name: 'Trade Republic Interest', type: 'INCOME' }
+                    })
+                    await prisma.transaction.create({
+                        data: {
+                            assetId: 'TR-INTEREST',
+                            type: 'INTEREST',
+                            quantity: 1,
+                            price: tx.amount,
+                            currency: tx.currency || 'EUR',
+                            date: tx.date,
+                        }
+                    })
+                    imported++
+                    continue
+                }
+
+                if (!tx.symbol || !tx.quantity || tx.amount === 0) {
+                    skipped++
+                    continue
+                }
+
                 // Use ISIN directly - Yahoo Finance supports ISIN lookups
                 const symbol = isinToSymbol(tx.symbol)
 
-                // Calculate price per share from total amount
+                // Calculate price per share from total amount (income rows have quantity 1)
                 const price = tx.amount / tx.quantity
+
+                const existing = await findDuplicateTransaction(symbol.toUpperCase(), tx.type, tx.quantity, price, tx.date)
+                if (existing) { skipped++; continue }
 
                 // Import as transaction (symbol will be the ISIN)
                 await addTransaction({
                     symbol,
-                    type: tx.type as 'BUY' | 'SELL', // parse filter above only passes BUY/SELL through
+                    type: tx.type as 'BUY' | 'SELL' | 'DIVIDEND', // parse filter only passes these through
                     quantity: tx.quantity,
                     price,
                     date: tx.date,
@@ -1136,23 +1186,7 @@ export async function importXTBStatementAction(fileData: string, fileName: strin
             try {
                 const price = tx.amount / tx.quantity
 
-                // Skip if this exact transaction was already imported.
-                // Use ±30 min (not ±1 day) so two purchases of the same quantity
-                // at different prices or times on the same day are not falsely merged.
-                // Price is also included so identical-quantity trades at different prices
-                // on adjacent days are not treated as duplicates.
-                const existing = await prisma.transaction.findFirst({
-                    where: {
-                        assetId: tx.symbol.toUpperCase(),
-                        type: tx.type,
-                        quantity: tx.quantity,
-                        price: { gte: price - 0.001, lte: price + 0.001 },
-                        date: {
-                            gte: new Date(tx.date.getTime() - 1800000),
-                            lte: new Date(tx.date.getTime() + 1800000),
-                        }
-                    }
-                })
+                const existing = await findDuplicateTransaction(tx.symbol.toUpperCase(), tx.type, tx.quantity, price, tx.date)
                 if (existing) { skipped++; continue }
                 await addTransaction({
                     symbol: tx.symbol,
