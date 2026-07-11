@@ -1,0 +1,3 @@
+description = "Generate a structured pull request description"
+prompt = "@{.agents/commands/pr-message.prompt.md}"
+

@@ -72,12 +72,41 @@ Monthly performance uses the **Modified Dietz** method. `getAssetDetails` comput
 
 Currency switching (`?currency=EUR` or `?currency=USD`) is a URL query param propagated between pages.
 
+### Shared Types (`src/app/types.ts`)
+
+Client-safe type definitions used by both Server Actions and Client Components: `TransactionData`, `DepositData`, `PensionData`, `Holding`.
+
+### Statement Import Parsers (`src/lib/`)
+
+Two broker import parsers, each with a matching pair of Server Actions in `actions.ts`:
+
+- **`trade-republic-parser.ts`** — parses Trade Republic PDF bank statements. Uses `eval('require')('pdf-parse')` to bypass Next.js bundler restrictions on the pdf-parse module. Called by `parseTradeRepublicStatement` / `importTradeRepublicStatement`.
+- **`xtb-parser.ts`** — parses XTB broker Excel (`.xlsx`) exports using the `xlsx` library. Reads the `Cash Operations` sheet (rows start at index 5). XTB tickers use exchange suffixes (e.g. `CDR.PT`) that are stripped to canonical symbols (`CDR`) via `XTB_EXCHANGE_SUFFIX_MAP` in `actions.ts`. Called by `parseXTBStatementAction` / `importXTBStatementAction`.
+
+### Symbol Resolution
+
+`getQuotes` in `actions.ts` normalises three symbol formats before fetching:
+- **ISIN** (regex `/^[A-Z]{2}[A-Z0-9]{9}\d$/`) — resolved to ticker via Yahoo Finance search with 24h cache; hardcoded overrides in `ISIN_OVERRIDES` for known problem cases (e.g. Xiaomi Frankfurt `1810.F`).
+- **XTB exchange-suffix** (regex `/^[A-Z0-9]+\.(US|PT|ES|IT|FR|BE)$/`) — normalised by `resolveXTBTicker` using `XTB_EXCHANGE_SUFFIX_MAP` / `XTB_TICKER_OVERRIDES`.
+- **Plain ticker** — passed through unchanged.
+
+### Portfolio State: Active vs. Closed
+
+- `getPortfolio()` — returns current holdings (net quantity > 0).
+- `getSoldPortfolio()` — returns fully-exited positions (net quantity = 0), shown in `ClosedPositionsTable` on the investments page.
+
 ### Client Components
 
 All dialogs and interactive components in `src/components/` are `'use client'`. They call Server Actions directly (not via `fetch`). Notable ones:
 - `DataManagementDialog` — local export/import, local path backup, and Google Drive backup/restore
 - `ImportStatementDialog` / `ImportButton` — Trade Republic PDF statement import
-- `HoldingsTable` — inline asset name editing via `updateAssetName` Server Action
+- `ImportXTBDialog` / `ImportXTBButton` — XTB Excel statement import
+- `HoldingsTable` — active holdings with inline asset name editing via `updateAssetName`
+- `ClosedPositionsTable` — fully-exited positions (read-only)
+
+### UI Stack
+
+Tailwind CSS v4, Recharts for charts, Lucide React for icons. No component library — custom components in `src/components/ui/` (currently only `progress.tsx`).
 
 ### Environment Variables
 

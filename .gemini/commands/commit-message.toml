@@ -1,0 +1,2 @@
+description = "Generate a conventional commit message"
+prompt = "@{.agents/commands/commit-message.prompt.md}"
