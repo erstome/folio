@@ -10,6 +10,7 @@ import { LineChart, Calendar } from 'lucide-react';
 import { Holding } from "@/app/types";
 import { MonthlyPerformanceTable } from "@/components/MonthlyPerformanceTable";
 import { ClosedPositionsTable } from "@/components/ClosedPositionsTable";
+import { PortfolioValueChart } from "@/components/PortfolioValueChart";
 
 export default async function InvestmentsPage({ searchParams }: { searchParams: { currency?: string } }) {
     const targetCurrency = searchParams?.currency || 'EUR';
@@ -108,6 +109,12 @@ export default async function InvestmentsPage({ searchParams }: { searchParams: 
                         <ImportButton />
                         <ImportXTBButton />
                     </div>
+                </div>
+
+                {/* Portfolio Value Over Time */}
+                <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6">
+                    <h2 className="text-xl font-bold text-white mb-6">Portfolio Value Over Time</h2>
+                    <PortfolioValueChart data={globalPerformance.performance} currency={targetCurrency} />
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-8">

@@ -1665,8 +1665,11 @@ export async function getAssetDetails(symbol: string) {
 // --- Global Portfolio Performance Logic ---
 
 export async function getPortfolioPerformance(targetCurrency = 'EUR') {
-    // 1. Fetch ALL Assets with Transactions
+    // 1. Fetch market-priced assets with Transactions.
+    // DEPOSIT/PENSION are excluded: they have no HistoricalPrice rows, so their
+    // contributions would inflate cumulativeInvested while valuing at ~0.
     const assets = await prisma.asset.findMany({
+        where: { type: { in: ['STOCK', 'ETF', 'CRYPTO'] } },
         include: { transactions: { orderBy: { date: 'asc' } } }
     });
 

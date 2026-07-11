@@ -4,6 +4,7 @@ import { Navbar } from "@/components/Navbar";
 import { getAssetDetails, getQuotes } from "@/app/actions";
 import { ArrowLeft, TrendingUp, DollarSign, Activity } from "lucide-react";
 import { MonthlyPerformanceTable } from "@/components/MonthlyPerformanceTable";
+import { PortfolioValueChart } from "@/components/PortfolioValueChart";
 
 // Force dynamic rendering to ensure fresh data
 export const dynamic = 'force-dynamic';
@@ -138,6 +139,12 @@ export default async function AssetDetailPage({
                             {stats?.currentHoldings || 0} shares
                         </div>
                     </div>
+                </div>
+
+                {/* Value Over Time */}
+                <div className="bg-card border border-border rounded-xl p-6">
+                    <h3 className="text-lg font-bold text-foreground mb-4">Value Over Time</h3>
+                    <PortfolioValueChart data={convertedPerformance} currency={targetCurrency} height={220} />
                 </div>
 
                 {/* Monthly Performance Table */}
