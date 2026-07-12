@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { createPortal } from 'react-dom'
 import { X, Cloud, CloudUpload, CloudDownload, Link as LinkIcon, RefreshCcw, CheckCircle2, AlertCircle, Database } from 'lucide-react'
-import { getGoogleAuthUrl, backupToGoogleDrive, restoreFromGoogleDrive, getSettings, updateSettings, exportDatabase, importDatabase, backupToLocalPath } from '@/app/actions'
+import { getGoogleAuthUrl, backupToGoogleDrive, restoreFromGoogleDrive, getSettings, updateSettings, exportDatabase, importDatabase, backupToLocalPath, getAppMode } from '@/app/actions'
 import { Settings, Save, AlertTriangle, Download, Upload, FolderSync, Monitor, Globe } from 'lucide-react'
 
 interface DataManagementDialogProps {
@@ -20,6 +20,9 @@ export function DataManagementDialog({ isOpen, onClose }: DataManagementDialogPr
     const [config, setConfig] = useState<Record<string, string>>({})
     const [activeTab, setActiveTab] = useState<'cloud' | 'local'>('local')
     const [localPath, setLocalPath] = useState('')
+    // Cloud deployment: data already lives in the user's Google Drive, so the
+    // manual Drive backup tab and local folder sync make no sense there.
+    const [cloudMode, setCloudMode] = useState(false)
 
     useEffect(() => {
         setMounted(true)
@@ -27,6 +30,7 @@ export function DataManagementDialog({ isOpen, onClose }: DataManagementDialogPr
         if (savedTokens) {
             setTokens(JSON.parse(savedTokens))
         }
+        getAppMode().then(m => setCloudMode(m.cloud)).catch(() => { })
         loadSettings()
     }, [])
 
@@ -101,15 +105,17 @@ export function DataManagementDialog({ isOpen, onClose }: DataManagementDialogPr
         e.preventDefault()
         setStatus('loading')
         const formData = new FormData(e.currentTarget)
-        const data = {
-            GOOGLE_CLIENT_ID: formData.get('clientId') as string,
-            GOOGLE_CLIENT_SECRET: formData.get('clientSecret') as string,
-            NEXT_PUBLIC_BASE_URL: formData.get('baseUrl') as string,
+        const data: Record<string, string> = {
             TWELVEDATA_API_KEY: formData.get('twelveDataApiKey') as string,
             FMP_API_KEY: formData.get('fmpApiKey') as string,
         }
+        if (!cloudMode) {
+            data.GOOGLE_CLIENT_ID = formData.get('clientId') as string
+            data.GOOGLE_CLIENT_SECRET = formData.get('clientSecret') as string
+            data.NEXT_PUBLIC_BASE_URL = formData.get('baseUrl') as string
+        }
         await updateSettings(data)
-        setConfig(data)
+        setConfig(prev => ({ ...prev, ...data }))
         setStatus('success')
         setMessage('Settings saved successfully!')
         setIsSettingsOpen(false)
@@ -211,27 +217,32 @@ export function DataManagementDialog({ isOpen, onClose }: DataManagementDialogPr
                         </div>
                         {activeTab === 'local' && <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-indigo-500 rounded-full" />}
                     </button>
-                    <button
-                        onClick={() => { setActiveTab('cloud'); setIsSettingsOpen(false); }}
-                        className={`pb-3 text-sm font-medium transition-colors relative ml-6 ${activeTab === 'cloud' ? 'text-indigo-500' : 'text-muted-foreground hover:text-foreground'}`}
-                    >
-                        <div className="flex items-center gap-2">
-                            <Globe className="w-4 h-4" />
-                            Cloud Sync
-                        </div>
-                        {activeTab === 'cloud' && <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-indigo-500 rounded-full" />}
-                    </button>
+                    {!cloudMode && (
+                        <button
+                            onClick={() => { setActiveTab('cloud'); setIsSettingsOpen(false); }}
+                            className={`pb-3 text-sm font-medium transition-colors relative ml-6 ${activeTab === 'cloud' ? 'text-indigo-500' : 'text-muted-foreground hover:text-foreground'}`}
+                        >
+                            <div className="flex items-center gap-2">
+                                <Globe className="w-4 h-4" />
+                                Cloud Sync
+                            </div>
+                            {activeTab === 'cloud' && <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-indigo-500 rounded-full" />}
+                        </button>
+                    )}
                 </div>
 
                 <div className="space-y-4">
                     {isSettingsOpen ? (
                         <form onSubmit={handleSaveSettings} className="space-y-4 animate-in slide-in-from-top-2 duration-200">
-                            <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-lg flex gap-2 text-xs text-amber-600 dark:text-amber-500 mb-2">
-                                <AlertTriangle className="w-4 h-4 shrink-0" />
-                                <p>These settings are required for the "final user" to connect their own Google Drive without using .env files.</p>
-                            </div>
+                            {!cloudMode && (
+                                <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-lg flex gap-2 text-xs text-amber-600 dark:text-amber-500 mb-2">
+                                    <AlertTriangle className="w-4 h-4 shrink-0" />
+                                    <p>These settings are required for the "final user" to connect their own Google Drive without using .env files.</p>
+                                </div>
+                            )}
 
                             <div className="space-y-3">
+                                {!cloudMode && (<>
                                 <div className="space-y-1">
                                     <label className="text-xs font-medium text-muted-foreground">Google Client ID</label>
                                     <input
@@ -260,6 +271,7 @@ export function DataManagementDialog({ isOpen, onClose }: DataManagementDialogPr
                                         className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
                                     />
                                 </div>
+                                </>)}
                                 <div className="space-y-1">
                                     <label className="text-xs font-medium text-muted-foreground">FMP API Key (Optional)</label>
                                     <input
@@ -312,6 +324,7 @@ export function DataManagementDialog({ isOpen, onClose }: DataManagementDialogPr
                                 </label>
                             </div>
 
+                            {!cloudMode && (
                             <div className="space-y-3 pt-2">
                                 <div className="flex items-center justify-between">
                                     <h3 className="text-sm font-medium text-foreground flex items-center gap-2">
@@ -338,6 +351,7 @@ export function DataManagementDialog({ isOpen, onClose }: DataManagementDialogPr
                                     </button>
                                 </div>
                             </div>
+                            )}
                         </div>
                     ) : tokens ? (
                         <div className="space-y-4">

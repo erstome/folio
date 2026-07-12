@@ -2,8 +2,8 @@ import Link from "next/link";
 import { Navbar } from "@/components/Navbar";
 import { PortfolioCharts } from "@/components/PortfolioCharts";
 import { Holding } from "@/app/types";
-import { getPortfolio, getQuotes, getDeposits, getPensions } from "./actions";
-import { syncFxRates } from "@/lib/fx";
+import { getPortfolio, getQuotes, getDeposits, getPensions, syncFxRatesAction } from "./actions";
+import { isCloudMode } from "@/lib/app-mode";
 import { cn } from "@/lib/utils";
 import { LayoutDashboard, TrendingUp, Wallet, ArrowUpRight, ArrowDownRight, MoreHorizontal, PiggyBank } from "lucide-react";
 
@@ -18,8 +18,14 @@ export default async function Home({ searchParams }: { searchParams: { currency?
         getPensions(),
     ]);
 
-    // Background FX rate sync (one cheap HTTP call; not awaited)
-    syncFxRates().catch(err => console.error("FX sync failed:", err));
+    // FX rate sync (one cheap HTTP call). Serverless freezes after the
+    // response, so cloud mode must await it; local mode keeps it in the
+    // background.
+    if (isCloudMode()) {
+        await syncFxRatesAction().catch(err => console.error("FX sync failed:", err));
+    } else {
+        syncFxRatesAction().catch(err => console.error("FX sync failed:", err));
+    }
 
     const uniqueSymbols = Array.from(new Set(rawPortfolio.map(p => p.symbol)));
 

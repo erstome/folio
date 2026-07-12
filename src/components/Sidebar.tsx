@@ -2,8 +2,9 @@
 
 import Link from 'next/link'
 import { usePathname, useSearchParams } from 'next/navigation'
-import { LayoutDashboard, Wallet, PiggyBank, Briefcase, LineChart } from 'lucide-react'
+import { LayoutDashboard, Wallet, PiggyBank, Briefcase, LineChart, LogOut } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { signOutAction } from '@/app/auth-actions'
 
 const navigation = [
     { name: 'Dashboard', href: '/', icon: LayoutDashboard },
@@ -12,10 +13,12 @@ const navigation = [
     { name: 'Retirement', href: '/pension', icon: PiggyBank },
 ]
 
-export function Sidebar() {
+export function Sidebar({ userEmail }: { userEmail?: string | null }) {
     const pathname = usePathname()
     const searchParams = useSearchParams()
     const currency = searchParams.get('currency') || 'EUR' // Default to EUR now
+
+    if (pathname === '/login') return null
 
     return (
         <div className="flex flex-col w-64 border-r border-border bg-card h-screen sticky top-0">
@@ -45,7 +48,21 @@ export function Sidebar() {
                     )
                 })}
             </nav>
-            <div className="p-4 border-t border-border">
+            <div className="p-4 border-t border-border space-y-3">
+                {userEmail && (
+                    <div className="flex items-center justify-between gap-2">
+                        <span className="text-xs text-muted-foreground truncate" title={userEmail}>
+                            {userEmail}
+                        </span>
+                        <button
+                            onClick={() => signOutAction()}
+                            className="text-muted-foreground hover:text-foreground transition-colors shrink-0"
+                            title="Sign out"
+                        >
+                            <LogOut className="w-4 h-4" />
+                        </button>
+                    </div>
+                )}
                 <div className="text-xs text-muted-foreground text-center">
                     v0.2.0 Phase 2
                 </div>

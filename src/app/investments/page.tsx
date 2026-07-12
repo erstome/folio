@@ -4,8 +4,8 @@ import { HoldingsTable } from "@/components/HoldingsTable";
 import { RecentTransactions } from "@/components/RecentTransactions";
 import { ImportButton } from "@/components/ImportButton";
 import { ImportXTBButton } from "@/components/ImportXTBButton";
-import { getPortfolio, getQuotes, getTransactions, updateAssetName, syncHistoricalPrices, getPortfolioPerformance, getSoldPortfolio, getIncomeSummary } from "../actions";
-import { syncFxRates } from "@/lib/fx";
+import { getPortfolio, getQuotes, getTransactions, updateAssetName, syncHistoricalPrices, getPortfolioPerformance, getSoldPortfolio, getIncomeSummary, syncFxRatesAction } from "../actions";
+import { isCloudMode } from "@/lib/app-mode";
 import { cn } from "@/lib/utils";
 import { LineChart, Calendar } from 'lucide-react';
 import { Holding } from "@/app/types";
@@ -29,11 +29,18 @@ export default async function InvestmentsPage({ searchParams }: { searchParams: 
 
     const syncSymbols = Array.from(new Set(rawPortfolio.map(p => p.symbol)));
 
-    // 2. Trigger Background Syncs (Historical)
-    // We don't await this to keep the page load fast.
-    // Given the 429 risk, running it here is a good compromise.
-    syncHistoricalPrices(syncSymbols).catch(err => console.error("Background sync failed:", err));
-    syncFxRates().catch(err => console.error("FX sync failed:", err));
+    // 2. Trigger Historical + FX Syncs
+    // Local mode: fire-and-forget to keep the page load fast (throttled
+    // against Yahoo 429s). Cloud mode: serverless freezes after the response,
+    // so they must be awaited — syncHistoricalPrices caps itself at 2 stale
+    // symbols per call to stay fast.
+    if (isCloudMode()) {
+        await syncHistoricalPrices(syncSymbols).catch(err => console.error("Background sync failed:", err));
+        await syncFxRatesAction().catch(err => console.error("FX sync failed:", err));
+    } else {
+        syncHistoricalPrices(syncSymbols).catch(err => console.error("Background sync failed:", err));
+        syncFxRatesAction().catch(err => console.error("FX sync failed:", err));
+    }
 
     // 2. Fetch Quotes & Rates
     const [quotes, rateResult] = await Promise.all([
@@ -50,11 +57,12 @@ export default async function InvestmentsPage({ searchParams }: { searchParams: 
     }
 
     // 3. Process Portfolio (Stocks/Crypto)
+    const renameOps: Promise<unknown>[] = [];
     const enrichedPortfolio: Holding[] = rawPortfolio.map((asset) => {
         const quote = quotes[asset.symbol] || { price: 0, currency: 'USD', change: 0, changePercent: 0, name: asset.symbol };
 
         if (quote.name && quote.name !== asset.symbol && asset.name === asset.symbol) {
-            updateAssetName(asset.symbol, quote.name).catch(console.error)
+            renameOps.push(updateAssetName(asset.symbol, quote.name).catch(console.error))
         }
         const displayName = (quote.name && quote.name !== asset.symbol) ? quote.name : (asset.name || asset.symbol);
 
@@ -89,6 +97,10 @@ export default async function InvestmentsPage({ searchParams }: { searchParams: 
             isCached: quote.isCached
         }
     });
+
+    // Cloud mode: unawaited writes would be cut off when the serverless
+    // runtime freezes after the response.
+    if (isCloudMode() && renameOps.length > 0) await Promise.all(renameOps);
 
     const totalPortfolioValue = enrichedPortfolio.reduce((acc, curr) => acc + (curr.marketValue || 0), 0);
     const totalGain = enrichedPortfolio.reduce((acc, curr) => acc + (curr.gain || 0), 0);

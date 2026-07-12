@@ -1,11 +1,14 @@
 'use server'
 
-import { prisma } from '@/lib/db'
+import { prisma, markDbDirty, currentDbPath } from '@/lib/db'
 import { revalidatePath } from 'next/cache'
 import path from 'path'
 import { TransactionData, DepositData, PensionData } from './types'
 import { yahooFinance, getOAuthClient, google, fs, DB_PATH } from '@/lib/server-services'
-import { loadFxRates, convertCurrency, fxRateForDate } from '@/lib/fx'
+import { loadFxRates, convertCurrency, fxRateForDate, syncFxRates } from '@/lib/fx'
+import { withDb } from '@/lib/with-db'
+import { isCloudMode } from '@/lib/app-mode'
+import { invalidateDbClient } from '@/lib/drive-db'
 
 // Only BUY/SELL rows affect holdings, cost basis, and Dietz flows.
 // Income rows (DIVIDEND/INTEREST) and DEPOSIT principal must never be
@@ -30,14 +33,21 @@ async function findDuplicateTransaction(assetId: string, type: string, quantity:
     })
 }
 
-// --- Settings Actions ---
-
-export async function getSettings() {
-    const settings = await prisma.setting.findMany()
-    return settings.reduce((acc: Record<string, string>, curr: { key: string, value: string }) => ({ ...acc, [curr.key]: curr.value }), {} as Record<string, string>)
+// Lets client components adapt to the deployment mode (cloud = Google
+// login + Drive-hosted DB). Deliberately not wrapped in withDb: it reads
+// no data.
+export async function getAppMode() {
+    return { cloud: isCloudMode() }
 }
 
-export async function updateSettings(data: Record<string, string>) {
+// --- Settings Actions ---
+
+export const getSettings = withDb(async () => {
+    const settings = await prisma.setting.findMany()
+    return settings.reduce((acc: Record<string, string>, curr: { key: string, value: string }) => ({ ...acc, [curr.key]: curr.value }), {} as Record<string, string>)
+})
+
+export const updateSettings = withDb(async (data: Record<string, string>) => {
     for (const [key, value] of Object.entries(data)) {
         await prisma.setting.upsert({
             where: { key },
@@ -47,7 +57,7 @@ export async function updateSettings(data: Record<string, string>) {
     }
     revalidatePath('/')
     return { success: true }
-}
+})
 
 async function getCloudCredentials() {
     const settings = await getSettings()
@@ -58,7 +68,7 @@ async function getCloudCredentials() {
     }
 }
 
-export async function addTransaction(data: TransactionData) {
+export const addTransaction = withDb(async (data: TransactionData) => {
     const { symbol, type, quantity, price, date, currency = 'USD', assetName: providedName } = data
     const upperSymbol = symbol.toUpperCase()
 
@@ -106,9 +116,9 @@ export async function addTransaction(data: TransactionData) {
 
     revalidatePath('/')
     return { success: true }
-}
+})
 
-export async function updateTransaction(id: string, data: TransactionData) {
+export const updateTransaction = withDb(async (id: string, data: TransactionData) => {
     const { symbol, type, quantity, price, date, currency = 'USD' } = data
     const upperSymbol = symbol.toUpperCase()
 
@@ -137,9 +147,9 @@ export async function updateTransaction(id: string, data: TransactionData) {
 
     revalidatePath('/')
     return { success: true }
-}
+})
 
-export async function getTransactions() {
+export const getTransactions = withDb(async () => {
     const transactions = await prisma.transaction.findMany({
         orderBy: { date: 'desc' },
         take: 10,
@@ -156,9 +166,9 @@ export async function getTransactions() {
         symbol: t.assetId,
         assetName: t.asset.name
     }))
-}
+})
 
-export async function getPortfolio() {
+export const getPortfolio = withDb(async () => {
     // 1. Fetch Assets with Transactions (Stocks/Crypto/ETF only)
     const assets = await prisma.asset.findMany({
         where: {
@@ -225,9 +235,9 @@ export async function getPortfolio() {
     }).filter((h: any) => h.quantity > 0.0001) // Filter out fully sold / floating-point-zero assets
 
     return holdings
-}
+})
 
-export async function getSoldPortfolio() {
+export const getSoldPortfolio = withDb(async () => {
     // Fetch all STOCK/ETF/CRYPTO assets including their transactions
     const assets = await prisma.asset.findMany({
         where: {
@@ -307,7 +317,7 @@ export async function getSoldPortfolio() {
         .sort((a, b) => (b.lastDate?.getTime() ?? 0) - (a.lastDate?.getTime() ?? 0))
 
     return closed
-}
+})
 
 // Helper for FMP
 // Helper for Twelvedata
@@ -420,7 +430,7 @@ async function resolveISIN(isin: string): Promise<string | null> {
     return null;
 }
 
-export async function getQuotes(symbols: string[]) {
+export const getQuotes = withDb(async (symbols: string[]) => {
     if (symbols.length === 0) return {}
 
     const now = Date.now();
@@ -649,9 +659,9 @@ export async function getQuotes(symbols: string[]) {
     }
 
     return results;
-}
+})
 
-export async function updateAssetName(symbol: string, name: string) {
+export const updateAssetName = withDb(async (symbol: string, name: string) => {
     try {
         await prisma.asset.update({
             where: { symbol },
@@ -662,9 +672,9 @@ export async function updateAssetName(symbol: string, name: string) {
         console.error("Failed to update asset name", e)
         return { success: false }
     }
-}
+})
 
-export async function updateDeposit(assetId: string, data: DepositData) {
+export const updateDeposit = withDb(async (assetId: string, data: DepositData) => {
     // 1. Update Asset fields
     await prisma.asset.update({
         where: { symbol: assetId },
@@ -703,9 +713,9 @@ export async function updateDeposit(assetId: string, data: DepositData) {
 
     revalidatePath('/deposits')
     revalidatePath('/')
-}
+})
 
-export async function addDeposit(data: DepositData) {
+export const addDeposit = withDb(async (data: DepositData) => {
     const { amount, bankName, currency, interestRate, startDate, maturityDate } = data
 
     // Generate a unique ID/Symbol for the deposit
@@ -745,9 +755,9 @@ export async function addDeposit(data: DepositData) {
         console.error("Failed to add deposit", e)
         return { success: false }
     }
-}
+})
 
-export async function getDeposits() {
+export const getDeposits = withDb(async () => {
     const deposits = await prisma.asset.findMany({
         where: { type: 'DEPOSIT' },
         include: {
@@ -797,11 +807,11 @@ export async function getDeposits() {
             progress
         }
     })
-}
+})
 
 const now = new Date()
 
-export async function addPension(data: PensionData) {
+export const addPension = withDb(async (data: PensionData) => {
     const { name, currentValue, quantity, investedAmount, currency, isTaxAdvantaged } = data
     const symbol = `PPR-${name.toUpperCase().replace(/\s+/g, '-')}-${new Date().getTime()}`
 
@@ -839,9 +849,9 @@ export async function addPension(data: PensionData) {
         console.error("Failed to add pension", e)
         return { success: false, error: e instanceof Error ? e.message : 'Unknown error' }
     }
-}
+})
 
-export async function updatePension(id: string, data: { name: string, isTaxAdvantaged: boolean, manualPrice?: number }) {
+export const updatePension = withDb(async (id: string, data: { name: string, isTaxAdvantaged: boolean, manualPrice?: number }) => {
     try {
         await prisma.asset.update({
             where: { symbol: id },
@@ -857,9 +867,9 @@ export async function updatePension(id: string, data: { name: string, isTaxAdvan
         console.error("Failed to update pension", e)
         return { success: false }
     }
-}
+})
 
-export async function addPensionContribution(id: string, amount: number, quantity: number, date: Date) {
+export const addPensionContribution = withDb(async (id: string, amount: number, quantity: number, date: Date) => {
     try {
         const asset = await prisma.asset.findUnique({
             where: { symbol: id },
@@ -888,9 +898,9 @@ export async function addPensionContribution(id: string, amount: number, quantit
         console.error("Failed to add contribution", e)
         return { success: false }
     }
-}
+})
 
-export async function getPensions() {
+export const getPensions = withDb(async () => {
     const pensions = await prisma.asset.findMany({
         where: { type: 'PENSION' },
         include: {
@@ -931,8 +941,8 @@ export async function getPensions() {
             price: currentPrice
         }
     })
-}
-export async function deleteAsset(id: string) {
+})
+export const deleteAsset = withDb(async (id: string) => {
     try {
         // Delete Asset (Cascade delete should handle transactions if set up, 
         // but explicit delete is safer for MVP if schema is simple)
@@ -955,9 +965,9 @@ export async function deleteAsset(id: string) {
         console.error("Failed to delete asset", e)
         return { success: false }
     }
-}
+})
 
-export async function deleteTransaction(id: string) {
+export const deleteTransaction = withDb(async (id: string) => {
     try {
         // Get transaction to find asset
         const transaction = await prisma.transaction.findUnique({
@@ -994,9 +1004,9 @@ export async function deleteTransaction(id: string) {
         console.error("Failed to delete transaction", e)
         return { success: false }
     }
-}
+})
 
-export async function parseTradeRepublicStatement(fileData: string) {
+export const parseTradeRepublicStatement = withDb(async (fileData: string) => {
     try {
         // Dynamic import for parser (needed because it uses require for pdf-parse)
         const parserModule = await import('@/lib/trade-republic-parser')
@@ -1029,9 +1039,9 @@ export async function parseTradeRepublicStatement(fileData: string) {
             transactions: []
         }
     }
-}
+})
 
-export async function importTradeRepublicStatement(fileData: string, fileName: string, selectedTransactions?: number[]) {
+export const importTradeRepublicStatement = withDb(async (fileData: string, fileName: string, selectedTransactions?: number[]) => {
     try {
         // Use the parse function (which we just created)
         const parseResult = await parseTradeRepublicStatement(fileData)
@@ -1133,11 +1143,11 @@ export async function importTradeRepublicStatement(fileData: string, fileName: s
             errors: []
         }
     }
-}
+})
 
 // --- XTB Import Actions ---
 
-export async function parseXTBStatementAction(fileData: string) {
+export const parseXTBStatementAction = withDb(async (fileData: string) => {
     try {
         const { parseXTBStatement } = await import('@/lib/xtb-parser')
         const base64Data = fileData.includes(',') ? fileData.split(',')[1] : fileData
@@ -1152,9 +1162,9 @@ export async function parseXTBStatementAction(fileData: string) {
             transactions: []
         }
     }
-}
+})
 
-export async function importXTBStatementAction(fileData: string, fileName: string, selectedTransactions?: number[]) {
+export const importXTBStatementAction = withDb(async (fileData: string, fileName: string, selectedTransactions?: number[]) => {
     try {
         const parseResult = await parseXTBStatementAction(fileData)
         if (!parseResult.success) {
@@ -1207,11 +1217,11 @@ export async function importXTBStatementAction(fileData: string, fileName: strin
             errors: []
         }
     }
-}
+})
 
 // --- Cloud Backup Actions ---
 
-export async function getGoogleAuthUrl() {
+export const getGoogleAuthUrl = withDb(async () => {
     const credentials = await getCloudCredentials()
     if (!credentials.clientId) {
         throw new Error('Google Client ID is not configured. Please go to Cloud Sync settings.')
@@ -1223,9 +1233,9 @@ export async function getGoogleAuthUrl() {
         prompt: 'consent'
     })
     return url
-}
+})
 
-export async function backupToGoogleDrive(tokens: any) {
+export const backupToGoogleDrive = withDb(async (tokens: any) => {
     try {
         const credentials = await getCloudCredentials()
         const oauth2Client = getOAuthClient(credentials)
@@ -1272,9 +1282,9 @@ export async function backupToGoogleDrive(tokens: any) {
         console.error("Backup failed", e)
         return { success: false, error: e instanceof Error ? e.message : 'Unknown error' }
     }
-}
+})
 
-export async function restoreFromGoogleDrive(tokens: any) {
+export const restoreFromGoogleDrive = withDb(async (tokens: any) => {
     try {
         const credentials = await getCloudCredentials()
         const oauth2Client = getOAuthClient(credentials)
@@ -1317,30 +1327,36 @@ export async function restoreFromGoogleDrive(tokens: any) {
         console.error("Restore failed", e)
         return { success: false, error: e instanceof Error ? e.message : 'Unknown error' }
     }
-}
+})
 // --- Local Backup Actions ---
 
-export async function exportDatabase() {
+export const exportDatabase = withDb(async () => {
     try {
-        const dbContent = fs.readFileSync(DB_PATH)
+        const dbContent = fs.readFileSync(currentDbPath() ?? DB_PATH)
         return { success: true, content: dbContent.toString('base64'), filename: 'folio_backup.db' }
     } catch (e: any) {
         return { success: false, error: e.message }
     }
-}
+})
 
-export async function importDatabase(base64Content: string) {
+export const importDatabase = withDb(async (base64Content: string) => {
     try {
         const buffer = Buffer.from(base64Content, 'base64')
-        fs.writeFileSync(DB_PATH, buffer)
+        const dbPath = currentDbPath() ?? DB_PATH
+        // Cloud mode: the cached Prisma client must release the file before
+        // its bytes are replaced, and the raw-file write must be flagged for
+        // upload since it bypasses Prisma.
+        await invalidateDbClient(dbPath)
+        fs.writeFileSync(dbPath, buffer)
+        markDbDirty()
         revalidatePath('/')
         return { success: true }
     } catch (e: any) {
         return { success: false, error: e.message }
     }
-}
+})
 
-export async function backupToLocalPath(targetPath: string) {
+export const backupToLocalPath = withDb(async (targetPath: string) => {
     try {
         // Ensure directory exists
         const dir = path.dirname(targetPath)
@@ -1359,14 +1375,14 @@ export async function backupToLocalPath(targetPath: string) {
     } catch (e: any) {
         return { success: false, error: e.message }
     }
-}
+})
 
 // --- Historical Price Sync ---
 
 // Helper to delay execution
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
-export async function syncHistoricalPrices(symbols?: string[]) {
+export const syncHistoricalPrices = withDb(async (symbols?: string[]) => {
     try {
         const assets = await prisma.asset.findMany({
             where: {
@@ -1378,7 +1394,15 @@ export async function syncHistoricalPrices(symbols?: string[]) {
 
         console.log(`[syncHistoricalPrices] Syncing ${assets.length} assets with Yahoo.`);
 
+        // Cloud mode runs awaited inside a serverless request, so it must be
+        // fast: no throttling sleeps, and at most 2 stale symbols per call
+        // (the rest catch up on subsequent page loads).
+        const cloud = isCloudMode();
+        const maxSyncs = cloud ? 2 : Infinity;
+        let synced = 0;
+
         for (const asset of assets) {
+            if (synced >= maxSyncs) break;
             if (asset.transactions.length === 0) continue;
 
             // Optimization: Check if we already have data for the current month
@@ -1395,7 +1419,7 @@ export async function syncHistoricalPrices(symbols?: string[]) {
             }
 
             // ADDED THROTTLING: Random delay between 2-5 seconds to avoid 429s
-            await delay(2000 + Math.random() * 3000);
+            if (!cloud) await delay(2000 + Math.random() * 3000);
 
             try {
                 // YAHOO FALLBACK (Original Logic)
@@ -1449,6 +1473,7 @@ export async function syncHistoricalPrices(symbols?: string[]) {
                         create: { symbol: asset.symbol, date: endOfMonth, price: row.close || row.adjClose || 0, currency: asset.lastCurrency || 'USD' }
                     });
                 }
+                synced++;
             } catch (err: any) {
                 console.error(`[syncHistoricalPrices] Failed for ${asset.symbol}:`, err.message);
                 if (err.code === 429 || err.status === 429 || err.message?.includes('429')) {
@@ -1462,14 +1487,18 @@ export async function syncHistoricalPrices(symbols?: string[]) {
         console.error("[syncHistoricalPrices] Global error:", e);
         return { success: false };
     }
-}
+})
+
+// Pages must trigger the FX sync through this wrapped action (not
+// lib/fx.ts directly) so cloud mode routes it to the user's Drive DB.
+export const syncFxRatesAction = withDb(async () => syncFxRates())
 
 // --- Asset Detail & Performance Logic ---
 
 // Helper: Calculate Month-End Date
 const getMonthEnd = (date: Date) => new Date(date.getFullYear(), date.getMonth() + 1, 0);
 
-export async function getAssetDetails(symbol: string) {
+export const getAssetDetails = withDb(async (symbol: string) => {
     const asset = await prisma.asset.findUnique({
         where: { symbol },
         include: { transactions: { orderBy: { date: 'asc' } } }
@@ -1694,11 +1723,11 @@ export async function getAssetDetails(symbol: string) {
             currentValuation
         }
     };
-}
+})
 
 // --- Income (Dividends / Interest) ---
 
-export async function getIncomeSummary(targetCurrency = 'EUR') {
+export const getIncomeSummary = withDb(async (targetCurrency: string = 'EUR') => {
     const incomeTxs = await prisma.transaction.findMany({
         where: { type: { in: ['DIVIDEND', 'INTEREST'] } },
         include: { asset: { select: { name: true } } },
@@ -1757,11 +1786,11 @@ export async function getIncomeSummary(targetCurrency = 'EUR') {
         byMonth: Array.from(byMonthMap.values()).sort((a, b) => a.monthSortable - b.monthSortable),
         bySymbol: Array.from(bySymbolMap.values()).sort((a, b) => b.total - a.total),
     }
-}
+})
 
 // --- Global Portfolio Performance Logic ---
 
-export async function getPortfolioPerformance(targetCurrency = 'EUR') {
+export const getPortfolioPerformance = withDb(async (targetCurrency: string = 'EUR') => {
     // 1. Fetch market-priced assets with Transactions.
     // DEPOSIT/PENSION are excluded: they have no HistoricalPrice rows, so their
     // contributions would inflate cumulativeInvested while valuing at ~0.
@@ -1933,4 +1962,4 @@ export async function getPortfolioPerformance(targetCurrency = 'EUR') {
     return {
         performance: monthlyPerformance.reverse()
     };
-}
+})
