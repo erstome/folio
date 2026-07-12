@@ -14,5 +14,8 @@
       "Read(./**/*.auto.tfvars)"
     ]
   },
-  "model": "claude-sonnet-4-6"
+  "model": "claude-sonnet-4-6",
+  "enabledPlugins": {
+    "superpowers@claude-plugins-official": true
+  }
 }
