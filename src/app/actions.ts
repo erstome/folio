@@ -1709,19 +1709,13 @@ export async function getIncomeSummary(targetCurrency = 'EUR') {
         return { totalIncome: 0, totalDividends: 0, totalInterest: 0, byMonth: [], bySymbol: [] }
     }
 
-    let eurUsdRate = 1.1
+    const fxRates = await loadFxRates()
+    let spotRate: number | undefined
     try {
         const rateResult = await getQuotes(['EURUSD=X'])
         const rateQuote = rateResult['EURUSD=X']
-        if (rateQuote && rateQuote.price) eurUsdRate = rateQuote.price
-    } catch (e) { /* use default */ }
-
-    const convert = (amount: number, currency: string) => {
-        if (currency === targetCurrency) return amount
-        if (currency === 'EUR' && targetCurrency === 'USD') return amount * eurUsdRate
-        if (currency === 'USD' && targetCurrency === 'EUR') return amount / eurUsdRate
-        return amount
-    }
+        if (rateQuote && rateQuote.price) spotRate = rateQuote.price
+    } catch (e) { /* rely on stored historical rates */ }
 
     let totalDividends = 0
     let totalInterest = 0
@@ -1729,7 +1723,7 @@ export async function getIncomeSummary(targetCurrency = 'EUR') {
     const bySymbolMap = new Map<string, { symbol: string; name: string; total: number }>()
 
     for (const t of incomeTxs) {
-        const amount = convert(t.quantity * t.price, t.currency || 'EUR')
+        const amount = convertCurrency(t.quantity * t.price, t.currency || 'EUR', targetCurrency, fxRates, new Date(t.date), spotRate)
         const d = new Date(t.date)
         const monthKey = d.getFullYear() * 100 + d.getMonth()
 

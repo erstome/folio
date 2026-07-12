@@ -70,7 +70,7 @@ vi.mock('@/lib/db', () => ({
     },
 }))
 
-import { getAssetDetails, getPortfolioPerformance, getPortfolio } from '@/app/actions'
+import { getAssetDetails, getPortfolioPerformance, getPortfolio, getIncomeSummary } from '@/app/actions'
 import { prisma } from '@/lib/db'
 
 describe('getAssetDetails', () => {
@@ -110,5 +110,22 @@ describe('getPortfolio', () => {
         // 10 * 100 EUR * 1.10 + 10 * 100 EUR * 1.08 = 1100 + 1080 = 2180 USD
         expect(aapl.totalCost).toBeCloseTo(2180, 6)
         expect(aapl.avgCost).toBeCloseTo(109, 6)
+    })
+})
+
+describe('getIncomeSummary', () => {
+    it('converts each income payment at the FX rate of its own date', async () => {
+        vi.mocked(prisma.transaction.findMany).mockResolvedValueOnce([
+            // 110 USD dividend on 2024-01-15 (rate 1.10) -> 100 EUR
+            { id: 'd1', assetId: 'AAPL', type: 'DIVIDEND', currency: 'USD', quantity: 1, price: 110, date: new Date('2024-01-15T00:00:00.000Z'), asset: { name: 'Apple' } },
+            // 54 USD interest on Sunday 2024-06-16 (nearest rate 1.08) -> 50 EUR
+            { id: 'i1', assetId: 'TR-INTEREST', type: 'INTEREST', currency: 'USD', quantity: 1, price: 54, date: new Date('2024-06-16T00:00:00.000Z'), asset: { name: 'Trade Republic Interest' } },
+        ] as any)
+
+        const summary = await getIncomeSummary('EUR')
+
+        expect(summary.totalDividends).toBeCloseTo(100, 6)
+        expect(summary.totalInterest).toBeCloseTo(50, 6)
+        expect(summary.totalIncome).toBeCloseTo(150, 6)
     })
 })
