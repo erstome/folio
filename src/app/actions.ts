@@ -1541,14 +1541,17 @@ export async function getAssetDetails(symbol: string) {
         const monthStart = new Date(cursorDate.getFullYear(), cursorDate.getMonth(), 1);
         const monthEnd = getMonthEnd(cursorDate);
         const monthEndStr = monthEnd.toISOString().split('T')[0];
+        // monthEnd is MIDNIGHT on the last day, so date comparisons must use the
+        // exclusive start of the next month or last-day transactions fall in a gap.
+        const nextMonthStart = new Date(cursorDate.getFullYear(), cursorDate.getMonth() + 1, 1);
 
         // Is this the current partial month?
-        const isCurrentMonth = monthEnd > now;
+        const isCurrentMonth = now < nextMonthStart;
 
         // 1. Identify Transactions in this Month (needed for price fallback below)
         const txsInMonth = asset.transactions.filter(t => {
             const tDate = new Date(t.date);
-            return tDate >= monthStart && tDate <= monthEnd;
+            return tDate >= monthStart && tDate < nextMonthStart;
         });
 
         // 2. Get Price at End of Month
@@ -1856,6 +1859,9 @@ export async function getPortfolioPerformance(targetCurrency = 'EUR') {
         const monthStart = new Date(cursorDate.getFullYear(), cursorDate.getMonth(), 1);
         const monthEnd = getMonthEnd(cursorDate);
         const monthEndStr = monthEnd.toISOString().split('T')[0];
+        // monthEnd is MIDNIGHT on the last day, so date comparisons must use the
+        // exclusive start of the next month or last-day transactions fall in a gap.
+        const nextMonthStart = new Date(cursorDate.getFullYear(), cursorDate.getMonth() + 1, 1);
 
         let totalStartValue = 0;
         let totalEndValue = 0;
@@ -1871,7 +1877,7 @@ export async function getPortfolioPerformance(targetCurrency = 'EUR') {
             // A. Identify Transactions (in this month)
             const txsInMonth = asset.transactions.filter(t => {
                 const tDate = new Date(t.date);
-                return tDate >= monthStart && tDate <= monthEnd;
+                return tDate >= monthStart && tDate < nextMonthStart;
             });
 
             // B. Calculate Net Flow & Weighted Flow (in Asset Currency)
