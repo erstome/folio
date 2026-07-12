@@ -5,6 +5,7 @@ import { RecentTransactions } from "@/components/RecentTransactions";
 import { ImportButton } from "@/components/ImportButton";
 import { ImportXTBButton } from "@/components/ImportXTBButton";
 import { getPortfolio, getQuotes, getTransactions, updateAssetName, syncHistoricalPrices, getPortfolioPerformance, getSoldPortfolio, getIncomeSummary } from "../actions";
+import { syncFxRates } from "@/lib/fx";
 import { cn } from "@/lib/utils";
 import { LineChart, Calendar } from 'lucide-react';
 import { Holding } from "@/app/types";
@@ -31,7 +32,8 @@ export default async function InvestmentsPage({ searchParams }: { searchParams: 
     // 2. Trigger Background Syncs (Historical)
     // We don't await this to keep the page load fast.
     // Given the 429 risk, running it here is a good compromise.
-    syncHistoricalPrices([...syncSymbols, 'EURUSD=X']).catch(err => console.error("Background sync failed:", err));
+    syncHistoricalPrices(syncSymbols).catch(err => console.error("Background sync failed:", err));
+    syncFxRates().catch(err => console.error("FX sync failed:", err));
 
     // 2. Fetch Quotes & Rates
     const [quotes, rateResult] = await Promise.all([

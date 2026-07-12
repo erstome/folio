@@ -3,6 +3,7 @@ import { Navbar } from "@/components/Navbar";
 import { PortfolioCharts } from "@/components/PortfolioCharts";
 import { Holding } from "@/app/types";
 import { getPortfolio, getQuotes, getDeposits, getPensions } from "./actions";
+import { syncFxRates } from "@/lib/fx";
 import { cn } from "@/lib/utils";
 import { LayoutDashboard, TrendingUp, Wallet, ArrowUpRight, ArrowDownRight, MoreHorizontal, PiggyBank } from "lucide-react";
 
@@ -16,6 +17,9 @@ export default async function Home({ searchParams }: { searchParams: { currency?
         getDeposits(),
         getPensions(),
     ]);
+
+    // Background FX rate sync (one cheap HTTP call; not awaited)
+    syncFxRates().catch(err => console.error("FX sync failed:", err));
 
     const uniqueSymbols = Array.from(new Set(rawPortfolio.map(p => p.symbol)));
 
