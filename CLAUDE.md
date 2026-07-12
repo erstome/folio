@@ -24,6 +24,9 @@ npm run build
 # Lint
 npm run lint
 
+# Run tests (Vitest)
+npm test
+
 # Inspect database interactively
 npx prisma studio
 
@@ -31,7 +34,7 @@ npx prisma studio
 npx prisma generate
 ```
 
-There are no automated tests in this project.
+Tests use Vitest (`npm test`); they live next to the code as `*.test.ts` files under `src/`.
 
 ## Architecture
 
@@ -41,6 +44,7 @@ All data access is centralized in a single Next.js Server Actions file: **`src/a
 
 - **`src/lib/db.ts`** — Prisma singleton (prevents multiple client instances in dev HMR).
 - **`src/lib/server-services.ts`** — Isolates server-only Node.js imports (`yahoo-finance2`, `googleapis`, `fs`, `DB_PATH`) so they never leak into Client Components.
+- **`src/lib/fx.ts`** — historical EUR/USD FX rates: daily ECB rates synced from the Frankfurter API into `HistoricalPrice` (symbol `EURUSD=X`, price = USD per 1 EUR), plus `convertCurrency`/`fxRateForDate` lookup helpers used by every currency-converting server action. Synced fire-and-forget on `/` and `/investments` page loads.
 
 ### Database Schema (`prisma/schema.prisma`)
 
