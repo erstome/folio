@@ -4,6 +4,7 @@ import { Navbar } from "@/components/Navbar";
 import { getAssetDetails, getQuotes } from "@/app/actions";
 import { ArrowLeft, TrendingUp, DollarSign, Activity } from "lucide-react";
 import { MonthlyPerformanceTable } from "@/components/MonthlyPerformanceTable";
+import { AssetTransactionsTable } from "@/components/AssetTransactionsTable";
 import { PortfolioValueChart } from "@/components/PortfolioValueChart";
 
 // Force dynamic rendering to ensure fresh data
@@ -151,60 +152,12 @@ export default async function AssetDetailPage({
                 <MonthlyPerformanceTable data={convertedPerformance} currency={targetCurrency} />
 
                 {/* Transaction History Table */}
-                <div className="space-y-4 pt-4 border-t border-border">
-                    <h3 className="text-lg font-bold text-foreground flex items-center gap-2">
-                        <TrendingUp className="w-5 h-5 text-emerald-500" />
-                        Transaction History
-                    </h3>
-                    <div className="rounded-xl border border-border/50 overflow-hidden bg-muted/30">
-                        <table className="w-full text-left text-sm">
-                            <thead className="bg-muted text-muted-foreground">
-                                <tr>
-                                    <th className="px-6 py-4 font-medium">Date</th>
-                                    <th className="px-6 py-4 font-medium">Type</th>
-                                    <th className="px-6 py-4 font-medium text-right">Quantity</th>
-                                    <th className="px-6 py-4 font-medium text-right">Price</th>
-                                    <th className="px-6 py-4 font-medium text-right">Amount</th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-border/50">
-                                {transactions && transactions.length > 0 ? (
-                                    transactions.map((t: any) => (
-                                        <tr key={t.id} className="hover:bg-zinc-800/30 transition-colors">
-                                            <td className="px-6 py-4 font-medium text-foreground">
-                                                {new Date(t.date).toLocaleDateString()}
-                                            </td>
-                                            <td className={`px-6 py-4 font-medium ${
-                                                t.type === 'BUY' ? 'text-emerald-500' :
-                                                t.type === 'SELL' ? 'text-rose-500' :
-                                                t.type === 'DIVIDEND' ? 'text-sky-500' :
-                                                t.type === 'INTEREST' ? 'text-amber-500' :
-                                                'text-zinc-400'
-                                            }`}>
-                                                {t.type}
-                                            </td>
-                                            <td className="px-6 py-4 text-right tabular-nums text-foreground">
-                                                {t.quantity}
-                                            </td>
-                                            <td className="px-6 py-4 text-right tabular-nums text-muted-foreground">
-                                                {formatCurrency(t.price * conversionRate)}
-                                            </td>
-                                            <td className="px-6 py-4 text-right tabular-nums font-medium text-foreground">
-                                                {formatCurrency(t.quantity * t.price * conversionRate)}
-                                            </td>
-                                        </tr>
-                                    ))
-                                ) : (
-                                    <tr>
-                                        <td colSpan={5} className="px-6 py-8 text-center text-muted-foreground">
-                                            No transactions found.
-                                        </td>
-                                    </tr>
-                                )}
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
+                <AssetTransactionsTable
+                    transactions={transactions}
+                    symbol={asset.symbol}
+                    currency={targetCurrency}
+                    conversionRate={conversionRate}
+                />
             </div>
         </div>
     );
