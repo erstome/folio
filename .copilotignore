@@ -1,0 +1,9 @@
+.env
+.env.*
+secrets/**
+credentials/**
+**/*credentials*
+**/*.pem
+**/*.key
+*.auto.tfvars
+*.auto.tfvars.json

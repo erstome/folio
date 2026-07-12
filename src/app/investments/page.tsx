@@ -1,27 +1,43 @@
-
 import { Navbar } from "@/components/Navbar";
-import { PortfolioCharts, Holding } from "@/components/PortfolioCharts";
+import { PortfolioCharts } from "@/components/PortfolioCharts";
 import { HoldingsTable } from "@/components/HoldingsTable";
 import { RecentTransactions } from "@/components/RecentTransactions";
-import { getPortfolio, getQuotes, getTransactions, updateAssetName } from "../actions";
+import { ImportButton } from "@/components/ImportButton";
+import { ImportXTBButton } from "@/components/ImportXTBButton";
+import { getPortfolio, getQuotes, getTransactions, updateAssetName, syncHistoricalPrices, getPortfolioPerformance, getSoldPortfolio, getIncomeSummary } from "../actions";
+import { syncFxRates } from "@/lib/fx";
 import { cn } from "@/lib/utils";
-import { LineChart } from 'lucide-react';
+import { LineChart, Calendar } from 'lucide-react';
+import { Holding } from "@/app/types";
+import { MonthlyPerformanceTable } from "@/components/MonthlyPerformanceTable";
+import { ClosedPositionsTable } from "@/components/ClosedPositionsTable";
+import { PortfolioValueChart } from "@/components/PortfolioValueChart";
+import { IncomeSummary } from "@/components/IncomeSummary";
 
 export default async function InvestmentsPage({ searchParams }: { searchParams: { currency?: string } }) {
     const targetCurrency = searchParams?.currency || 'EUR';
     const isEur = targetCurrency === 'EUR';
 
     // 1. Fetch Data
-    const [rawPortfolio, transactions] = await Promise.all([
+    const [rawPortfolio, transactions, globalPerformance, soldPortfolio, incomeSummary] = await Promise.all([
         getPortfolio(),
-        getTransactions()
+        getTransactions(),
+        getPortfolioPerformance(targetCurrency),
+        getSoldPortfolio(),
+        getIncomeSummary(targetCurrency),
     ]);
 
-    const uniqueSymbols = Array.from(new Set(rawPortfolio.map(p => p.symbol)));
+    const syncSymbols = Array.from(new Set(rawPortfolio.map(p => p.symbol)));
+
+    // 2. Trigger Background Syncs (Historical)
+    // We don't await this to keep the page load fast.
+    // Given the 429 risk, running it here is a good compromise.
+    syncHistoricalPrices(syncSymbols).catch(err => console.error("Background sync failed:", err));
+    syncFxRates().catch(err => console.error("FX sync failed:", err));
 
     // 2. Fetch Quotes & Rates
     const [quotes, rateResult] = await Promise.all([
-        getQuotes(uniqueSymbols),
+        getQuotes(syncSymbols),
         getQuotes(['EURUSD=X'])
     ]);
 
@@ -69,6 +85,8 @@ export default async function InvestmentsPage({ searchParams }: { searchParams: 
             marketValue: currentValue,
             gain,
             gainPercent,
+            lastUpdate: quote.lastUpdate,
+            isCached: quote.isCached
         }
     });
 
@@ -91,6 +109,16 @@ export default async function InvestmentsPage({ searchParams }: { searchParams: 
                         </h2>
                         <p className="text-zinc-400 mt-1">Manage your stocks, ETFs and crypto assets.</p>
                     </div>
+                    <div className="flex gap-2">
+                        <ImportButton />
+                        <ImportXTBButton />
+                    </div>
+                </div>
+
+                {/* Portfolio Value Over Time */}
+                <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6">
+                    <h2 className="text-xl font-bold text-white mb-6">Portfolio Value Over Time</h2>
+                    <PortfolioValueChart data={globalPerformance.performance} currency={targetCurrency} />
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
@@ -114,13 +142,30 @@ export default async function InvestmentsPage({ searchParams }: { searchParams: 
                             />
                         </div>
 
+                        {/* Closed Positions */}
+                        {soldPortfolio.length > 0 && (
+                            <ClosedPositionsTable
+                                positions={soldPortfolio}
+                                currency={targetCurrency}
+                                usdPerEur={usdPerEur}
+                            />
+                        )}
+
                         {/* Recent Activity */}
                         <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6">
                             <h2 className="text-xl font-bold text-white mb-6">Recent Activity</h2>
                             <RecentTransactions
                                 transactions={transactions}
-                                assets={enrichedPortfolio}
                             />
+                        </div>
+
+                        {/* Global Monthly Performance */}
+                        <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6">
+                            <h2 className="text-xl font-bold text-white mb-6 flex items-center gap-2">
+                                <Calendar className="w-5 h-5 text-indigo-500" />
+                                Global Monthly Performance
+                            </h2>
+                            <MonthlyPerformanceTable data={globalPerformance.performance} currency={targetCurrency} />
                         </div>
                     </div>
 
@@ -131,6 +176,8 @@ export default async function InvestmentsPage({ searchParams }: { searchParams: 
                                 <h3 className="text-xl font-bold text-white mb-6">Asset Allocation</h3>
                                 <PortfolioCharts holdings={enrichedPortfolio} currency={targetCurrency} />
                             </div>
+
+                            <IncomeSummary income={incomeSummary} currency={targetCurrency} />
                         </div>
                     </div>
                 </div>

@@ -1,0 +1,15 @@
+[[rule]]
+toolName = "run_shell_command"
+# Blocks shell commands that attempt to access common sensitive files
+commandRegex = ".*(\\.env|secrets|credentials|\\.devcontainer/devcontainer\\.env\\.example).*"
+decision = "deny"
+priority = 500
+denyMessage = "Accessing sensitive files (.env, secrets, credentials, etc.) via shell is prohibited by security policy."
+
+[[rule]]
+toolName = "run_shell_command"
+# Blocks dangerous recursive removal commands
+commandRegex = ".*rm -rf.*"
+decision = "deny"
+priority = 500
+denyMessage = "Recursive force removal (rm -rf) is prohibited via shell for safety."
