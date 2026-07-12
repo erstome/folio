@@ -5,6 +5,7 @@ import { revalidatePath } from 'next/cache'
 import path from 'path'
 import { TransactionData, DepositData, PensionData } from './types'
 import { yahooFinance, getOAuthClient, google, fs, DB_PATH } from '@/lib/server-services'
+import { loadFxRates, convertCurrency, fxRateForDate } from '@/lib/fx'
 
 // Only BUY/SELL rows affect holdings, cost basis, and Dietz flows.
 // Income rows (DIVIDEND/INTEREST) and DEPOSIT principal must never be
@@ -172,19 +173,15 @@ export async function getPortfolio() {
         },
     })
 
-    // 2. Fetch EURUSD exchange rate for normalization (Rough approximation: use current rate)
-    // Ideally use historical rates, but for MVP current rate is acceptable fallback.
-    // 'EUR=X' is approx USD/EUR or EUR/USD. Let's check getQuotes output from previous step.
-    // Actually, let's fetch it.
-    let eurUsdRate = 1.1; // Sensible default
+    // 2. Load historical FX rates (daily ECB) + live spot as last-resort fallback
+    const fxRates = await loadFxRates();
+    let spotRate: number | undefined;
     try {
         const rateResult = await getQuotes(['EURUSD=X']);
         const rateQuote = rateResult['EURUSD=X'];
-        if (rateQuote && rateQuote.price) {
-            eurUsdRate = rateQuote.price;
-        }
+        if (rateQuote && rateQuote.price) spotRate = rateQuote.price;
     } catch (e) {
-        console.warn("Failed to fetch exchange rate via getQuotes, using fallback 1.1", e)
+        console.warn("Failed to fetch live EURUSD rate; using stored historical rates", e)
     }
 
     // Calculate holdings
@@ -194,17 +191,9 @@ export async function getPortfolio() {
 
         asset.transactions.forEach((t) => {
             if (!isTrade(t)) return
-            // Normalize Price to USD
-            // @ts-ignore
+            // Normalize price to USD at the rate of the transaction's own date
             const txCurrency = t.currency || 'USD';
-            let txPriceInUsd = t.price;
-
-            if (txCurrency === 'EUR') {
-                // t.price is in EUR.
-                // eurUsdRate is USD per EUR (1.17).
-                // USD = EUR * Rate
-                txPriceInUsd = t.price * eurUsdRate;
-            }
+            const txPriceInUsd = convertCurrency(t.price, txCurrency, 'USD', fxRates, new Date(t.date), spotRate);
 
             if (t.type === 'BUY') {
                 quantity += t.quantity
@@ -249,12 +238,13 @@ export async function getSoldPortfolio() {
         },
     })
 
-    let eurUsdRate = 1.1;
+    const fxRates = await loadFxRates();
+    let spotRate: number | undefined;
     try {
         const rateResult = await getQuotes(['EURUSD=X']);
         const rateQuote = rateResult['EURUSD=X'];
-        if (rateQuote && rateQuote.price) eurUsdRate = rateQuote.price;
-    } catch (e) { /* use default */ }
+        if (rateQuote && rateQuote.price) spotRate = rateQuote.price;
+    } catch (e) { /* rely on stored historical rates */ }
 
     const closed = assets.map((asset) => {
         let quantity = 0
@@ -266,7 +256,7 @@ export async function getSoldPortfolio() {
         asset.transactions.forEach((t) => {
             if (!isTrade(t)) return
             const txCurrency = (t.currency as string) || 'USD';
-            const txPriceInUsd = txCurrency === 'EUR' ? t.price * eurUsdRate : t.price;
+            const txPriceInUsd = convertCurrency(t.price, txCurrency, 'USD', fxRates, new Date(t.date), spotRate);
 
             if (t.type === 'BUY') {
                 quantity += t.quantity
@@ -290,8 +280,7 @@ export async function getSoldPortfolio() {
             .filter(t => t.type === 'BUY')
             .reduce((sum, t) => {
                 const txCurrency = (t.currency as string) || 'USD';
-                const txPriceInUsd = txCurrency === 'EUR' ? t.price * eurUsdRate : t.price;
-                return sum + t.quantity * txPriceInUsd
+                return sum + t.quantity * convertCurrency(t.price, txCurrency, 'USD', fxRates, new Date(t.date), spotRate)
             }, 0)
 
         const realizedGain = proceeds - costOfSold

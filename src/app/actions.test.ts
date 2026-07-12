@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest'
 
-const { ASSETS } = vi.hoisted(() => {
+const { ASSETS, FX_ROWS, FX_ASSETS } = vi.hoisted(() => {
     // Regression fixture: the second BUY lands on the LAST day of April at 07:56,
     // after midnight — monthly loops that treat month-end as midnight drop it.
     const ASSETS = [{
@@ -15,7 +15,24 @@ const { ASSETS } = vi.hoisted(() => {
             { id: '2', assetId: 'TEST.MC', type: 'BUY', currency: 'EUR', quantity: 10, price: 100, date: new Date('2026-04-30T07:56:00.000Z') },
         ],
     }]
-    return { ASSETS }
+
+    const FX_ROWS = [
+        { date: new Date('2024-01-15T00:00:00.000Z'), price: 1.10 },
+        { date: new Date('2024-06-14T00:00:00.000Z'), price: 1.08 }, // Friday
+    ]
+    const FX_ASSETS = [{
+        symbol: 'AAPL',
+        name: 'Apple',
+        type: 'STOCK',
+        transactions: [
+            // EUR buy on a day with an exact stored rate (1.10)
+            { id: '1', assetId: 'AAPL', type: 'BUY', currency: 'EUR', quantity: 10, price: 100, date: new Date('2024-01-15T10:00:00.000Z') },
+            // EUR buy on a Sunday -> nearest earlier rate (Friday, 1.08)
+            { id: '2', assetId: 'AAPL', type: 'BUY', currency: 'EUR', quantity: 10, price: 100, date: new Date('2024-06-16T10:00:00.000Z') },
+        ],
+    }]
+
+    return { ASSETS, FX_ROWS, FX_ASSETS }
 })
 
 vi.mock('next/cache', () => ({ revalidatePath: vi.fn() }))
@@ -43,7 +60,7 @@ vi.mock('@/lib/db', () => ({
         },
         setting: { findMany: vi.fn(async () => []) },
         historicalPrice: {
-            findMany: vi.fn(async () => []),
+            findMany: vi.fn(async (args: any) => (args?.where?.symbol === 'EURUSD=X' ? FX_ROWS : [])),
             findFirst: vi.fn(async () => null),
         },
         transaction: {
@@ -53,7 +70,8 @@ vi.mock('@/lib/db', () => ({
     },
 }))
 
-import { getAssetDetails, getPortfolioPerformance } from '@/app/actions'
+import { getAssetDetails, getPortfolioPerformance, getPortfolio } from '@/app/actions'
+import { prisma } from '@/lib/db'
 
 describe('getAssetDetails', () => {
     it('counts transactions on the last day of a month', async () => {
@@ -77,5 +95,20 @@ describe('getPortfolioPerformance', () => {
         expect(result.performance.length).toBeGreaterThan(0)
         // newest row first; cumulative invested must include the Apr 30 buy
         expect(result.performance[0].cumulativeInvested).toBeCloseTo(1500, 6)
+    })
+})
+
+describe('getPortfolio', () => {
+    it('converts each EUR transaction at the FX rate of its own date', async () => {
+        vi.mocked(prisma.asset.findMany).mockImplementation((async (args: any) => (args?.where?.type ? FX_ASSETS : [])) as any)
+
+        const holdings = await getPortfolio()
+
+        expect(holdings).toHaveLength(1)
+        const aapl = holdings[0]
+        expect(aapl.quantity).toBe(20)
+        // 10 * 100 EUR * 1.10 + 10 * 100 EUR * 1.08 = 1100 + 1080 = 2180 USD
+        expect(aapl.totalCost).toBeCloseTo(2180, 6)
+        expect(aapl.avgCost).toBeCloseTo(109, 6)
     })
 })
