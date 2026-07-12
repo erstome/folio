@@ -1774,11 +1774,12 @@ export async function getPortfolioPerformance(targetCurrency = 'EUR') {
 
     const symbols = assets.map(a => a.symbol);
 
-    // 2. Fetch ALL Historical Prices
+    // 2. Fetch ALL Historical Prices (FX rates come from loadFxRates below)
     const history = await prisma.historicalPrice.findMany({
-        where: { symbol: { in: [...symbols, 'EURUSD=X'] } },
+        where: { symbol: { in: symbols } },
         orderBy: { date: 'asc' }
     });
+    const fxRates = await loadFxRates();
 
     // Map: Symbol -> DateStr -> Price
     const priceMap = new Map<string, Map<string, number>>();
@@ -1814,26 +1815,13 @@ export async function getPortfolioPerformance(targetCurrency = 'EUR') {
     let runningInvested = 0;
 
     // Helper: Get XR (Exchange Rate to Target)
-    // If target is EUR, and asset is USD, we need USD/EUR rate (which is 1 / EURUSD)
-    // If target is EUR, and asset is EUR, rate is 1.
-    // If target is USD, and asset is EUR, rate is EURUSD.
-
-    const getExchangeRateToTarget = (assetCurrency: string, dateStr: string): number => {
+    // EURUSD (USD per 1 EUR) comes from stored daily ECB rates with
+    // nearest-earlier fallback for weekends/holidays.
+    const getExchangeRateToTarget = (assetCurrency: string, date: Date): number => {
         if (assetCurrency === targetCurrency) return 1;
-
-        // Try to get EURUSD price for that date
-        let eurusd = getPrice('EURUSD=X', dateStr);
-        if (!eurusd) {
-            // Fallback to active price if available (fetched in page, but we don't have it here easily without another query or passing it in)
-            // Or fallback to most recent known. 
-            // For now, let's look for ANY eurusd price in history? Too slow.
-            // Fallback to 1.1 (standard approx) or maybe we fetched it.
-            eurusd = 1.1; // Fallback
-        }
-
+        const eurusd = fxRateForDate(fxRates, date);
         if (targetCurrency === 'EUR' && assetCurrency === 'USD') return 1 / eurusd;
         if (targetCurrency === 'USD' && assetCurrency === 'EUR') return eurusd;
-
         return 1; // Unknown pair
     };
 
@@ -1855,7 +1843,7 @@ export async function getPortfolioPerformance(targetCurrency = 'EUR') {
         // Iterate all assets to sum up their stats for this month
         for (const asset of assets) {
             const assetCurrency = asset.lastCurrency || 'USD';
-            const xr = getExchangeRateToTarget(assetCurrency, monthEndStr);
+            const xr = getExchangeRateToTarget(assetCurrency, monthEnd);
 
             // A. Identify Transactions (in this month)
             const txsInMonth = asset.transactions.filter(t => {
