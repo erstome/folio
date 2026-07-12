@@ -4,7 +4,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-**Folio** is a personal finance tracker (Next.js 14 App Router + TypeScript) for investments, bank deposits, and retirement funds. All data is stored locally in a SQLite database via Prisma.
+**Folio** is a personal finance tracker (Next.js 14 App Router + TypeScript) for investments, bank deposits, and retirement funds. Data lives in a SQLite database via Prisma, in one of two deployment modes:
+
+- **Local mode** (default, `AUTH_SECRET` unset): no login, SQLite at `prisma/dev.db` — the classic behavior.
+- **Cloud mode** (`AUTH_SECRET` set, e.g. on Vercel): Google sign-in required; each user's database is a SQLite file stored as `Folio/folio.db` **in their own Google Drive**. Per request the file is downloaded to `/tmp` (only when its Drive version changed), the existing Prisma code runs against it, and it is uploaded back after writes. The server persists nothing; OAuth tokens live only in the encrypted session cookie.
 
 ## Commands
 
@@ -32,6 +35,10 @@ npx prisma studio
 
 # After schema changes, regenerate Prisma client
 npx prisma generate
+
+# After schema changes, also regenerate the embedded empty-DB template
+# (src/lib/template-db.ts, used to seed a new user's Drive in cloud mode)
+npm run db:template
 ```
 
 Tests use Vitest (`npm test`); they live next to the code as `*.test.ts` files under `src/`.
@@ -40,11 +47,16 @@ Tests use Vitest (`npm test`); they live next to the code as `*.test.ts` files u
 
 ### Data Layer
 
-All data access is centralized in a single Next.js Server Actions file: **`src/app/actions.ts`**. This file handles every read and write operation — there are no separate API routes for data (the only route is the Google OAuth callback at `src/app/api/auth/google/callback/route.ts`).
+All data access is centralized in a single Next.js Server Actions file: **`src/app/actions.ts`**. This file handles every read and write operation — there are no separate API routes for data (the only routes are the Auth.js handler at `src/app/api/auth/[...nextauth]/route.ts` and the legacy local-mode OAuth popup callback at `src/app/api/auth/google/callback/route.ts`).
 
-- **`src/lib/db.ts`** — Prisma singleton (prevents multiple client instances in dev HMR).
+Every exported action is wrapped in **`withDb`** (`src/lib/with-db.ts`): a no-op passthrough in local mode; in cloud mode it authenticates, hydrates the user's DB from Drive, runs the action inside an AsyncLocalStorage context, and uploads the file back if anything was written. New exported actions in `actions.ts` MUST be wrapped in `withDb(...)` unless they touch no data (see `getAppMode`).
+
+- **`src/lib/db.ts`** — the `prisma` export is a Proxy: it resolves to the per-user client from AsyncLocalStorage in cloud mode (flagging the context dirty on any mutating method) or to the classic local singleton otherwise. Also exports `markDbDirty()` (for raw-file writes that bypass Prisma) and `currentDbPath()`.
+- **`src/lib/app-mode.ts`** — `isCloudMode()` (= `AUTH_SECRET` set). Import the mode check from here, not from `lib/auth.ts`: this module must stay free of next-auth imports (vitest can't resolve next-auth, and local mode shouldn't load it).
+- **`src/lib/auth.ts`** — Auth.js v5 config: Google provider with the `drive.file` scope, offline access + refresh-token rotation, `ALLOWED_EMAILS` allowlist, JWT sessions. Must stay edge-safe (imported by `src/middleware.ts`) — no googleapis/fs/prisma imports.
+- **`src/lib/drive-db.ts`** — cloud-mode storage: find-or-create `Folio/folio.db` in the user's Drive, version-checked download to `/tmp`, serialized optimistic-lock uploads (conflict → error asking the user to reload), per-user Prisma client cache. New users are seeded from `src/lib/template-db.ts` (generated — see `npm run db:template`).
 - **`src/lib/server-services.ts`** — Isolates server-only Node.js imports (`yahoo-finance2`, `googleapis`, `fs`, `DB_PATH`) so they never leak into Client Components.
-- **`src/lib/fx.ts`** — historical EUR/USD FX rates: daily ECB rates synced from the Frankfurter API into `HistoricalPrice` (symbol `EURUSD=X`, price = USD per 1 EUR), plus `convertCurrency`/`fxRateForDate` lookup helpers used by every currency-converting server action. Synced fire-and-forget on `/` and `/investments` page loads.
+- **`src/lib/fx.ts`** — historical EUR/USD FX rates: daily ECB rates synced from the Frankfurter API into `HistoricalPrice` (symbol `EURUSD=X`, price = USD per 1 EUR), plus `convertCurrency`/`fxRateForDate` lookup helpers used by every currency-converting server action. Pages trigger the sync via the wrapped `syncFxRatesAction` (fire-and-forget in local mode, awaited in cloud mode — serverless freezes after the response).
 
 ### Database Schema (`prisma/schema.prisma`)
 
@@ -62,7 +74,7 @@ An in-memory cache (5 min TTL) sits in front of all providers. ISINs are resolve
 
 ### Performance Calculation
 
-Monthly performance uses the **Modified Dietz** method. `getAssetDetails` computes per-symbol performance; `getPortfolioPerformance` aggregates all assets into a global view. Historical prices are synced lazily in the background on each `/investments` page load (`syncHistoricalPrices`), throttled 2–5 s between symbols to avoid Yahoo Finance 429s.
+Monthly performance uses the **Modified Dietz** method. `getAssetDetails` computes per-symbol performance; `getPortfolioPerformance` aggregates all assets into a global view. Historical prices are synced lazily on each `/investments` page load (`syncHistoricalPrices`): in local mode fire-and-forget, throttled 2–5 s between symbols to avoid Yahoo Finance 429s; in cloud mode awaited, unthrottled, and capped at 2 stale symbols per call (the rest catch up on later loads).
 
 ### Pages & Routing
 
@@ -116,11 +128,22 @@ Tailwind CSS v4, Recharts for charts, Lucide React for icons. No component libra
 
 | Variable | Source | Purpose |
 |---|---|---|
-| `DATABASE_URL` | `.env` | SQLite file path (e.g. `file:./dev.db`) |
-| `GOOGLE_CLIENT_ID` | `.env` or DB Setting | Google OAuth for Drive backup |
-| `GOOGLE_CLIENT_SECRET` | `.env` or DB Setting | Google OAuth for Drive backup |
-| `NEXT_PUBLIC_BASE_URL` | `.env` or DB Setting | Callback URL base (e.g. `http://localhost:3000`) |
+| `DATABASE_URL` | `.env` | SQLite file path (e.g. `file:./dev.db`); local mode only |
+| `AUTH_SECRET` | deployment env | **Enables cloud mode**; JWT session encryption key (`npx auth secret`) |
+| `ALLOWED_EMAILS` | deployment env | Cloud mode: comma-separated Google emails allowed to sign in |
+| `GOOGLE_CLIENT_ID` | `.env`/env or DB Setting | Google OAuth (login + Drive) |
+| `GOOGLE_CLIENT_SECRET` | `.env`/env or DB Setting | Google OAuth (login + Drive) |
+| `NEXT_PUBLIC_BASE_URL` | `.env` or DB Setting | Local-mode popup callback URL base (e.g. `http://localhost:3000`) |
 | `TWELVEDATA_API_KEY` | DB Setting only | Optional; preferred quote provider |
 | `FMP_API_KEY` | DB Setting only | Optional; second-choice quote provider |
 
-API keys for Twelvedata and FMP are stored in the `Setting` table via the Data Management dialog, not in `.env`.
+API keys for Twelvedata and FMP are stored in the `Setting` table via the Data Management dialog, not in `.env` — in cloud mode that means inside the user's Drive-hosted DB, i.e. per user.
+
+### Deploying (Vercel, cloud mode)
+
+Full user-facing guide: **`docs/DEPLOYMENT.md`**. In short:
+
+1. Google Cloud Console: OAuth client (Web) with redirect URI `https://<app-domain>/api/auth/callback/google`; enable the Drive API; **publish the consent screen to "In production"** (in Testing status Google expires refresh tokens after 7 days; `drive.file` is non-sensitive so publishing needs no verification).
+2. Vercel env vars: `AUTH_SECRET`, `ALLOWED_EMAILS`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`. `postinstall` runs `prisma generate`; the schema's `binaryTargets` already includes `rhel-openssl-3.0.x`.
+3. First login auto-creates `Folio/folio.db` in the user's Drive from the embedded template; existing local data is migrated via Data Management → Export DB (locally) → Import DB (deployed app).
+4. Schema changes do NOT auto-migrate the SQLite files in users' Drives — see the caveat section in `docs/DEPLOYMENT.md`.

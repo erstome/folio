@@ -2,7 +2,14 @@
 
 Folio is a web application whose primary purpose is to let users track their
 personal finances - investiments, banck deposits, and retirment funds - all in
-one place. All data is stored locally in a prisma database.
+one place. It runs in two modes:
+
+- **Local mode** (default): no login; all data stored locally in a SQLite
+  database (`prisma/dev.db`).
+- **Cloud mode** (deployed, e.g. on Vercel): sign in with Google; your
+  database is a SQLite file stored in a `Folio` folder **in your own Google
+  Drive** — the server keeps nothing. See
+  [docs/DEPLOYMENT.md](./docs/DEPLOYMENT.md).
 
 This app was constructed using [Google Antigravity](https://antigravity.dev/) IDE.
 For real-time stock price updates, it uses the Yahoo Finance API.
@@ -52,9 +59,10 @@ You can check out [the Next.js GitHub repository](https://github.com/vercel/next
 
 ## Deploy on Vercel
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Folio deploys to Vercel's free tier with Google sign-in and the database
+stored in your own Google Drive. The full step-by-step guide — Google Cloud
+OAuth setup, Vercel configuration, and data migration — is in
+[docs/DEPLOYMENT.md](./docs/DEPLOYMENT.md).
 
 ## Setup
 
