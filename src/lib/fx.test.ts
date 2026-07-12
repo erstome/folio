@@ -1,4 +1,19 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi, beforeEach } from 'vitest'
+
+vi.mock('@/lib/db', () => ({
+    prisma: {
+        historicalPrice: {
+            findFirst: vi.fn(),
+            findMany: vi.fn(),
+            upsert: vi.fn(),
+        },
+        transaction: {
+            findFirst: vi.fn(),
+        },
+    },
+}))
+
+import { prisma } from '@/lib/db'
 import type { TransactionData } from '@/app/types'
 import { buildFxRates, fxRateForDate, convertCurrency } from '@/lib/fx'
 
@@ -55,5 +70,125 @@ describe('convertCurrency', () => {
 
     it('returns the amount unchanged for unknown currency pairs', () => {
         expect(convertCurrency(100, 'GBP', 'EUR', rates, d)).toBe(100)
+    })
+})
+
+import { syncFxRates, loadFxRates } from '@/lib/fx'
+
+const mockedPrisma = vi.mocked(prisma, true)
+const mockFetch = vi.fn()
+vi.stubGlobal('fetch', mockFetch)
+
+const okResponse = (body: unknown) => ({
+    ok: true,
+    status: 200,
+    json: async () => body,
+}) as unknown as Response
+
+describe('syncFxRates', () => {
+    beforeEach(() => {
+        vi.clearAllMocks()
+    })
+
+    it('skips the fetch entirely when the last stored rate is fresher than 3 days', async () => {
+        mockedPrisma.historicalPrice.findFirst.mockResolvedValue({ date: new Date() } as any)
+        const res = await syncFxRates()
+        expect(res.success).toBe(true)
+        expect(mockFetch).not.toHaveBeenCalled()
+    })
+
+    it('fetches from the day after the last stored rate and upserts each day', async () => {
+        mockedPrisma.historicalPrice.findFirst.mockResolvedValue({ date: new Date('2024-06-01T00:00:00.000Z') } as any)
+        mockFetch.mockResolvedValue(okResponse({ rates: { '2024-06-03': { USD: 1.09 } } }))
+
+        const res = await syncFxRates()
+
+        expect(res.success).toBe(true)
+        expect(mockFetch).toHaveBeenCalledTimes(1)
+        const url = mockFetch.mock.calls[0][0] as string
+        expect(url).toContain('/v1/2024-06-02..')
+        expect(url).toContain('symbols=USD')
+        expect(mockedPrisma.historicalPrice.upsert).toHaveBeenCalledWith({
+            where: { symbol_date: { symbol: 'EURUSD=X', date: new Date('2024-06-03T00:00:00.000Z') } },
+            update: { price: 1.09, currency: 'USD' },
+            create: { symbol: 'EURUSD=X', date: new Date('2024-06-03T00:00:00.000Z'), price: 1.09, currency: 'USD' },
+        })
+    })
+
+    it('starts from the earliest transaction date on first run', async () => {
+        mockedPrisma.historicalPrice.findFirst.mockResolvedValue(null)
+        mockedPrisma.transaction.findFirst.mockResolvedValue({ date: new Date('2023-03-10T00:00:00.000Z') } as any)
+        mockFetch.mockResolvedValue(okResponse({ rates: {} }))
+
+        await syncFxRates()
+
+        const url = mockFetch.mock.calls[0][0] as string
+        expect(url).toContain('/v1/2023-03-10..')
+    })
+
+    it('falls back to 2020-01-01 when there are no transactions at all', async () => {
+        mockedPrisma.historicalPrice.findFirst.mockResolvedValue(null)
+        mockedPrisma.transaction.findFirst.mockResolvedValue(null)
+        mockFetch.mockResolvedValue(okResponse({ rates: {} }))
+
+        await syncFxRates()
+
+        const url = mockFetch.mock.calls[0][0] as string
+        expect(url).toContain('/v1/2020-01-01..')
+    })
+
+    it('returns success:false and upserts nothing on HTTP error', async () => {
+        mockedPrisma.historicalPrice.findFirst.mockResolvedValue(null)
+        mockedPrisma.transaction.findFirst.mockResolvedValue(null)
+        mockFetch.mockResolvedValue({ ok: false, status: 500 } as unknown as Response)
+
+        const res = await syncFxRates()
+
+        expect(res.success).toBe(false)
+        expect(mockedPrisma.historicalPrice.upsert).not.toHaveBeenCalled()
+    })
+
+    it('returns success:false on a malformed response body', async () => {
+        mockedPrisma.historicalPrice.findFirst.mockResolvedValue(null)
+        mockedPrisma.transaction.findFirst.mockResolvedValue(null)
+        mockFetch.mockResolvedValue(okResponse({ unexpected: true }))
+
+        const res = await syncFxRates()
+
+        expect(res.success).toBe(false)
+    })
+
+    it('skips days with missing or non-positive USD values', async () => {
+        mockedPrisma.historicalPrice.findFirst.mockResolvedValue(null)
+        mockedPrisma.transaction.findFirst.mockResolvedValue(null)
+        mockFetch.mockResolvedValue(okResponse({
+            rates: {
+                '2024-06-03': { USD: 0 },
+                '2024-06-04': {},
+                '2024-06-05': { USD: 1.09 },
+            },
+        }))
+
+        const res = await syncFxRates()
+
+        expect(res.success).toBe(true)
+        expect(mockedPrisma.historicalPrice.upsert).toHaveBeenCalledTimes(1)
+    })
+})
+
+describe('loadFxRates', () => {
+    it('loads stored EURUSD=X rows into an FxRates structure', async () => {
+        mockedPrisma.historicalPrice.findMany.mockResolvedValue([
+            { date: new Date('2024-01-15T00:00:00.000Z'), price: 1.10 },
+        ] as any)
+
+        const loaded = await loadFxRates()
+
+        expect(mockedPrisma.historicalPrice.findMany).toHaveBeenCalledWith({
+            where: { symbol: 'EURUSD=X' },
+            orderBy: { date: 'asc' },
+            select: { date: true, price: true },
+        })
+        expect(fxRateForDate(loaded, new Date('2024-01-15T00:00:00.000Z'))).toBe(1.10)
     })
 })
